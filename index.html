@@ -8,79 +8,158 @@
 </head>
 <body>
   <header class="container">
-    <h1>JWT Inspector</h1>
-    <p class="subtitle">Decode / Verify / Lint</p>
+    <h1>🔍 JWT Inspector</h1>
+    <p class="subtitle">ブラウザー上でJWTを安全にデコード・検証し、セキュリティリスクを自動検出するツール</p>
   </header>
 
   <main class="container card">
     <div class="tabs">
-      <button class="tab-button active" data-tab="decode">デコード</button>
-      <button class="tab-button" data-tab="verify">検証</button>
-      <button class="tab-button" data-tab="learn">学習</button>
+      <button class="tab-button active" data-tab="decode">🔓 デコード</button>
+      <button class="tab-button" data-tab="verify">✅ 検証</button>
+      <button class="tab-button" data-tab="learn">📚 学習</button>
     </div>
 
     <section id="decode" class="tab-content active">
-      <label for="jwtInput" class="label">JWT</label>
-      <textarea id="jwtInput" placeholder="eyJhbGciOi..."></textarea>
+      <div class="input-header">
+        <label for="jwtInput" class="label">JWTトークン</label>
+        <div class="sample-buttons">
+          <button id="btnSample1" class="sample-button">📝 正常なJWT</button>
+          <button id="btnSample2" class="sample-button">⚠️ 期限切れJWT</button>
+          <button id="btnSample3" class="sample-button">🚨 alg=none JWT</button>
+        </div>
+      </div>
+      <textarea id="jwtInput" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c
+
+JWTトークンをここに貼り付けてください..."></textarea>
       <div class="actions">
-        <button id="btnDecode">デコード</button>
-        <button id="btnClear">クリア</button>
+        <button id="btnDecode">🔍 デコード実行</button>
+        <button id="btnClear">🗑️ クリア</button>
       </div>
 
       <div class="grid-2">
         <div>
-          <h3>Header</h3>
+          <h3>📋 Header（ヘッダー）</h3>
           <pre id="headerOut" class="code"></pre>
         </div>
         <div>
-          <h3>Payload</h3>
+          <h3>📦 Payload（ペイロード）</h3>
           <pre id="payloadOut" class="code"></pre>
         </div>
       </div>
 
-      <h3>署名（Base64URL）</h3>
+      <h3>🔐 署名（Base64URL）</h3>
       <pre id="sigOut" class="code"></pre>
 
-      <h3>Lint（注意点）</h3>
+      <h3>⚠️ Lint（セキュリティチェック）</h3>
       <ul id="lintList" class="lint"></ul>
     </section>
 
     <section id="verify" class="tab-content">
-      <div class="form-row">
-        <label>アルゴリズム</label>
-        <select id="algSelect">
-          <option value="HS256">HS256 (HMAC-SHA-256)</option>
-          <option value="RS256">RS256 (RSA+SHA-256)</option>
-        </select>
+      <div class="verify-explanation">
+        <h3>🔒 署名検証とは？</h3>
+        <p>JWTの署名検証は、トークンが<strong>改ざんされていないか</strong>、<strong>正当な発行者</strong>によって作られたかを確認する重要なセキュリティ機能です。</p>
+        <ul class="explanation-list">
+          <li><strong>HS256</strong>: 発行者と検証者が同じ秘密鍵を共有する方式</li>
+          <li><strong>RS256</strong>: 発行者が秘密鍵で署名し、検証者が公開鍵で検証する方式</li>
+        </ul>
       </div>
 
-      <div id="hsKeyBox" class="form-row">
-        <label for="hsKey">HS鍵（UTF-8文字列）</label>
-        <input id="hsKey" type="text" placeholder="your-shared-secret" />
+      <div class="verify-section">
+        <h3>📋 クイック検証</h3>
+        <p class="section-desc">事前に用意されたJWTとキーで簡単に署名検証を体験できます</p>
+        
+        <div class="verification-steps">
+          <div class="step">
+            <span class="step-number">1</span>
+            <span class="step-text">下のボタンを押すと、サンプルJWTと対応する鍵が自動入力されます</span>
+          </div>
+          <div class="step">
+            <span class="step-number">2</span>
+            <span class="step-text">署名の検証処理が実行され、結果が表示されます</span>
+          </div>
+          <div class="step">
+            <span class="step-number">3</span>
+            <span class="step-text">✅（成功）または❌（失敗）で署名の正当性が分かります</span>
+          </div>
+        </div>
+        
+        <div class="quick-verify-buttons">
+          <button id="btnQuickHS256" class="quick-verify-button">🔑 HS256サンプル検証</button>
+          <button id="btnQuickRS256" class="quick-verify-button">🏢 RS256サンプル検証</button>
+        </div>
       </div>
 
-      <div id="rsKeyBox" class="form-row hidden">
-        <label for="rsPubKey">RS公開鍵（PEM, -----BEGIN PUBLIC KEY-----）</label>
-        <textarea id="rsPubKey" placeholder="-----BEGIN PUBLIC KEY-----&#10;MIIBIjANBgkqhkiG9w0B...&#10;-----END PUBLIC KEY-----"></textarea>
-      </div>
+      <div class="verify-section">
+        <h3>🔧 手動検証</h3>
+        <p class="section-desc">独自のJWTと鍵で検証を行います</p>
+        
+        <div class="manual-steps">
+          <p><strong>手順:</strong></p>
+          <ol class="manual-step-list">
+            <li>デコードタブでJWTを入力・デコードしてください</li>
+            <li>下でアルゴリズム（HS256またはRS256）を選択</li>
+            <li>対応する鍵を入力して「署名検証実行」ボタンを押す</li>
+          </ol>
+        </div>
+        
+        <div class="form-row">
+          <label>アルゴリズム</label>
+          <select id="algSelect">
+            <option value="HS256">HS256 (HMAC-SHA-256)</option>
+            <option value="RS256">RS256 (RSA+SHA-256)</option>
+          </select>
+        </div>
 
-      <div class="actions">
-        <button id="btnVerify">検証</button>
+        <div id="hsKeyBox" class="form-row">
+          <label for="hsKey">HS鍵（UTF-8文字列）</label>
+          <input id="hsKey" type="text" placeholder="your-shared-secret" />
+        </div>
+
+        <div id="rsKeyBox" class="form-row hidden">
+          <label for="rsPubKey">RS公開鍵（PEM, -----BEGIN PUBLIC KEY-----）</label>
+          <textarea id="rsPubKey" placeholder="-----BEGIN PUBLIC KEY-----&#10;MIIBIjANBgkqhkiG9w0B...&#10;-----END PUBLIC KEY-----"></textarea>
+        </div>
+
+        <div class="actions">
+          <button id="btnVerify">🔒 署名検証実行</button>
+        </div>
       </div>
 
       <div id="verifyResult" class="verify-result">未検証</div>
     </section>
 
     <section id="learn" class="tab-content">
-      <h3>JWTの落とし穴（要点）</h3>
-      <ul>
-        <li><b>alg=none</b> は危険。必ず拒否する。</li>
-        <li><b>HS256</b> は共有鍵が弱いと総当たりリスク。十分に長くランダムな鍵を。</li>
-        <li><b>RS256</b> は公開鍵を適切に配布・管理（PEM/SPKI形式）。</li>
-        <li><b>有効期限（exp, nbf）</b> を必ず検証。クライアント時刻のズレにも注意。</li>
-        <li><b>kid</b> でのキー選択はディレクトリトラバーサル等の悪用に注意（サーバ側実装）。</li>
-      </ul>
-      <p>本ツールは教育目的。実運用ではライブラリ/フレームワークのベストプラクティスに従ってください。</p>
+      <h3>🚨 JWTのセキュリティ上の注意点</h3>
+      <div class="learn-cards">
+        <div class="learn-card danger">
+          <h4>⛔ alg=none は絶対禁止</h4>
+          <p>署名なしのトークンを許可すると、攻撃者が自由にトークンを偽造できます。</p>
+        </div>
+        
+        <div class="learn-card warning">
+          <h4>🔑 HS256の鍵の強度</h4>
+          <p>共有鍵が短い・推測可能だと総当たり攻撃のリスクがあります。十分に長くランダムな鍵を使用してください。</p>
+        </div>
+        
+        <div class="learn-card info">
+          <h4>🏢 RS256の鍵管理</h4>
+          <p>公開鍵を適切に配布・管理し、PEM/SPKI形式で正しく設定してください。</p>
+        </div>
+        
+        <div class="learn-card warning">
+          <h4>⏰ 有効期限の重要性</h4>
+          <p>exp（有効期限）とnbf（有効開始時刻）を必ず検証し、クライアント時刻のズレも考慮してください。</p>
+        </div>
+        
+        <div class="learn-card danger">
+          <h4>🆔 kidヘッダーの悪用</h4>
+          <p>kidでのキー選択時、ディレクトリトラバーサル等の攻撃に注意が必要です（サーバー側実装）。</p>
+        </div>
+      </div>
+      
+      <div class="notice">
+        <p><strong>📝 注意:</strong> 本ツールは教育・学習目的です。実運用ではセキュリティライブラリやフレームワークのベストプラクティスに従ってください。</p>
+      </div>
     </section>
   </main>
 
