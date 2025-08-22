@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>JWT Inspector</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="container">
+    <h1>JWT Inspector</h1>
+    <p class="subtitle">Decode / Verify / Lint</p>
+  </header>
+
+  <main class="container card">
+    <div class="tabs">
+      <button class="tab-button active" data-tab="decode">デコード</button>
+      <button class="tab-button" data-tab="verify">検証</button>
+      <button class="tab-button" data-tab="learn">学習</button>
+    </div>
+
+    <section id="decode" class="tab-content active">
+      <label for="jwtInput" class="label">JWT</label>
+      <textarea id="jwtInput" placeholder="eyJhbGciOi..."></textarea>
+      <div class="actions">
+        <button id="btnDecode">デコード</button>
+        <button id="btnClear">クリア</button>
+      </div>
+
+      <div class="grid-2">
+        <div>
+          <h3>Header</h3>
+          <pre id="headerOut" class="code"></pre>
+        </div>
+        <div>
+          <h3>Payload</h3>
+          <pre id="payloadOut" class="code"></pre>
+        </div>
+      </div>
+
+      <h3>署名（Base64URL）</h3>
+      <pre id="sigOut" class="code"></pre>
+
+      <h3>Lint（注意点）</h3>
+      <ul id="lintList" class="lint"></ul>
+    </section>
+
+    <section id="verify" class="tab-content">
+      <div class="form-row">
+        <label>アルゴリズム</label>
+        <select id="algSelect">
+          <option value="HS256">HS256 (HMAC-SHA-256)</option>
+          <option value="RS256">RS256 (RSA+SHA-256)</option>
+        </select>
+      </div>
+
+      <div id="hsKeyBox" class="form-row">
+        <label for="hsKey">HS鍵（UTF-8文字列）</label>
+        <input id="hsKey" type="text" placeholder="your-shared-secret" />
+      </div>
+
+      <div id="rsKeyBox" class="form-row hidden">
+        <label for="rsPubKey">RS公開鍵（PEM, -----BEGIN PUBLIC KEY-----）</label>
+        <textarea id="rsPubKey" placeholder="-----BEGIN PUBLIC KEY-----&#10;MIIBIjANBgkqhkiG9w0B...&#10;-----END PUBLIC KEY-----"></textarea>
+      </div>
+
+      <div class="actions">
+        <button id="btnVerify">検証</button>
+      </div>
+
+      <div id="verifyResult" class="verify-result">未検証</div>
+    </section>
+
+    <section id="learn" class="tab-content">
+      <h3>JWTの落とし穴（要点）</h3>
+      <ul>
+        <li><b>alg=none</b> は危険。必ず拒否する。</li>
+        <li><b>HS256</b> は共有鍵が弱いと総当たりリスク。十分に長くランダムな鍵を。</li>
+        <li><b>RS256</b> は公開鍵を適切に配布・管理（PEM/SPKI形式）。</li>
+        <li><b>有効期限（exp, nbf）</b> を必ず検証。クライアント時刻のズレにも注意。</li>
+        <li><b>kid</b> でのキー選択はディレクトリトラバーサル等の悪用に注意（サーバ側実装）。</li>
+      </ul>
+      <p>本ツールは教育目的。実運用ではライブラリ/フレームワークのベストプラクティスに従ってください。</p>
+    </section>
+  </main>
+
+  <footer>
+    <div class="footer">
+      🔗 GitHubリポジトリはこちら（ <a href="https://github.com/ipusiron/jwt-inspector" target="_blank">ipusiron/jwt-inspector</a> ）
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
