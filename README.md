@@ -1,11 +1,37 @@
 <!--
 ---
-title: JWT Inspector
-category: web-security
-difficulty: 2
-description: Decode and verify JWTs (HS256/RS256) in-browser, with security lint hints.
-tags: [jwt, websecurity, crypto, education]
-demo: https://ipusiron.github.io/jwt-inspector/
+id: day053
+slug: jwt-inspector
+
+title: "JWT Inspector"
+
+subtitle_ja: "JWT（JSON Web Token）可視化・検証ツール"
+subtitle_en: "JWT Decoder, Verifier & Security Linter"
+
+description_ja: "ブラウザー上でJWTをデコード・検証し、alg=none攻撃や期限切れなどのセキュリティリスクを自動検出するツール"
+description_en: "Decode and verify JWTs (HS256/RS256) in-browser, with security lint hints for alg=none attacks, expiration issues, and more"
+
+category_ja:
+  - Webセキュリティ
+  - 認可
+category_en:
+  - Web Security
+  - Authorization
+
+difficulty: 3
+
+tags:
+  - jwt
+  - websecurity
+  - crypto
+  - education
+  - authentication
+  - web-crypto-api
+
+repo_url: "https://github.com/ipusiron/jwt-inspector"
+demo_url: "https://ipusiron.github.io/jwt-inspector/"
+
+hub: true
 ---
 -->
 
