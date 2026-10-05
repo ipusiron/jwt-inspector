@@ -175,6 +175,16 @@
 
   // ===== 時刻（RFC 7519 §2 の NumericDate は秒の数） =====
   const isNumericDate = (v) => typeof v === 'number' && Number.isFinite(v);
+
+  // 秒数を、いちばん大きい単位に丸める（画面はこの単位の文言を当てる）
+  const UNITS = [['day', 86400], ['hour', 3600], ['minute', 60]];
+  function duration(seconds) {
+    const n = Math.abs(Math.round(seconds));
+    for (const [unit, size] of UNITS) {
+      if (n >= size) return { unit, n: Math.floor(n / size) };
+    }
+    return { unit: 'second', n };
+  }
   const toIso = (sec) => new Date(sec * 1000).toISOString().replace('.000', '');
 
   // exp・nbf・iat を、いまの時刻と猶予で判定する
@@ -312,6 +322,7 @@
     parseToken,
     isNumericDate,
     toIso,
+    duration,
     timeStatus,
     lint,
     worst

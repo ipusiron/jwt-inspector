@@ -1,317 +1,293 @@
-// --- helpers ---
-const $ = (sel) => document.querySelector(sel);
-const $$ = (sel) => document.querySelectorAll(sel);
+// JWT Inspector - 画面の処理（DOM）。計算は js/jwt-core.js と js/jwt-verify.js、文言は js/messages.js に置く
+// 入力の状態を1つ持ち、render で描き直す（言語を切り替えたときも同じ関数で描き直す）
+(() => {
+  'use strict';
 
-function b64urlToUint8Array(b64url) {
-  const pad = '==='.slice((b64url.length + 3) % 4);
-  const b64 = (b64url + pad).replace(/-/g, '+').replace(/_/g, '/');
-  const raw = atob(b64);
-  const out = new Uint8Array(raw.length);
-  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
-  return out;
-}
-function uint8ArrayToB64url(arr) {
-  let s = '';
-  for (const c of arr) s += String.fromCharCode(c);
-  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-function parseJwtParts(jwt) {
-  const parts = jwt.trim().split('.');
-  if (parts.length !== 3) throw new Error('JWTは3パート（header.payload.signature）である必要があります。');
-  const [h, p, s] = parts;
-  return { h, p, s };
-}
-function safeJsonParse(bytes) {
-  try {
-    const txt = new TextDecoder().decode(bytes);
-    return JSON.parse(txt);
-  } catch (e) {
-    return null;
+  const C = globalThis.JwtCore;
+  const V = globalThis.JwtVerify;
+  const S = globalThis.JwtSamples;
+  const I18n = globalThis.JwtI18n;
+  const Theme = globalThis.JwtTheme;
+  const t = (key, vars) => globalThis.JwtMessages.t(key, vars);
+  const $ = (id) => document.getElementById(id);
+  const renders = [];
+
+  function el(tag, className, text) {
+    const e = document.createElement(tag);
+    if (className) e.className = className;
+    if (text !== undefined) e.textContent = text;
+    return e;
   }
-}
-function pretty(obj) {
-  return obj ? JSON.stringify(obj, null, 2) : '';
-}
-function nowSec() { return Math.floor(Date.now() / 1000); }
 
-// --- tabs ---
-function initTabs() {
-  $$('.tab-button').forEach(btn => {
-    btn.addEventListener('click', () => {
-      $$('.tab-button').forEach(b => b.classList.remove('active'));
-      $$('.tab-content').forEach(s => s.classList.remove('active'));
-      btn.classList.add('active');
-      const id = btn.dataset.tab;
-      $('#' + id).classList.add('active');
+  const nowSec = () => Math.floor(Date.now() / 1000);
+
+  // この端末の時計での表示（UTC は計算部の toIso）
+  const toLocal = (sec) => new Date(sec * 1000).toLocaleString();
+
+  // 秒数の値（left・ago・ahead）は、いちばん大きい単位に丸めてから文言に入れる
+  const DURATION_VARS = ['left', 'ago', 'ahead'];
+  function findingText(f) {
+    const vars = { ...f.vars };
+    for (const name of DURATION_VARS) {
+      if (typeof vars[name] === 'number') {
+        const d = C.duration(vars[name]);
+        vars[name] = t(`dur.${d.unit}`, { n: d.n });
+      }
+    }
+    return t(`lint.${f.code}`, vars);
+  }
+  const errorText = (r) => t(`err.${r.code}`, r); // 読み取りの誤り
+  const verifyErrorText = (r) => t(`verr.${r.code}`, r); // 検証の誤り
+
+  // ===== タブ（矢印キー・Home・End で移動、選んだタブだけ tabindex=0） =====
+  const tabs = [...document.querySelectorAll('.tab-btn')];
+
+  function selectTab(tab, focus) {
+    for (const b of tabs) {
+      const on = b === tab;
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+      b.tabIndex = on ? 0 : -1;
+      $(b.getAttribute('aria-controls')).hidden = !on;
+    }
+    if (focus) tab.focus();
+  }
+
+  tabs.forEach((b, i) => {
+    b.addEventListener('click', () => selectTab(b, false));
+    b.addEventListener('keydown', (e) => {
+      const target = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: tabs.length - 1 }[e.key];
+      if (target === undefined) return;
+      e.preventDefault();
+      selectTab(tabs[(target + tabs.length) % tabs.length], true);
     });
   });
-}
 
-// --- decode & lint ---
-function lintJwt(header, payload) {
-  const out = [];
+  // ===== デコードと検査 =====
+  const state = { token: null, copy: {} };
 
-  if (!header) out.push(['ng', 'ヘッダーが不正またはJSONとして解釈できません。']);
-  if (!payload) out.push(['ng', 'ペイロードが不正またはJSONとして解釈できません。']);
-
-  if (header) {
-    const alg = header.alg;
-    if (!alg) out.push(['ng', 'algが未指定。署名検証の前提が不明です。']);
-    if (alg === 'none') out.push(['ng', 'alg=none は重大なリスク。許可しないでください。']);
-    if (header.typ && header.typ !== 'JWT') out.push(['warn', `typ="${header.typ}"（一般的には"JWT"）`]);
-    if (header.kid) out.push(['warn', 'kidヘッダーあり。サーバー実装のキー選択ロジックに注意（パストラバーサル等）。']);
+  function renderParts(token) {
+    const pretty = (text) => JSON.stringify(JSON.parse(text), null, 2);
+    state.copy.header = pretty(token.headerText);
+    state.copy.payload = pretty(token.payloadText);
+    $('out-header').textContent = state.copy.header;
+    $('out-payload').textContent = state.copy.payload;
+    const n = token.signature.length;
+    $('signature-title').textContent = n ? t('decode.signature', { n }) : t('decode.signatureEmpty');
+    $('out-signature').textContent = token.raw.signature;
+    for (const part of ['header', 'payload']) $(`copy-${part}`).setAttribute('aria-label', t('decode.copyLabel', { name: t(`decode.${part}`) }));
   }
 
-  if (payload) {
+  function renderFindings(result) {
+    const counts = { danger: 0, warn: 0, info: 0, ok: 0 };
+    for (const f of result.findings) counts[f.level]++;
+    $('findings-summary').textContent = result.findings.length
+      ? t('decode.summary', { danger: counts.danger, warn: counts.warn, info: counts.info })
+      : t('decode.noFindings');
+    const order = { danger: 0, warn: 1, ok: 2, info: 3 };
+    const sorted = [...result.findings].sort((a, b) => order[a.level] - order[b.level]);
+    $('findings-list').replaceChildren(...sorted.map((f) => {
+      const li = el('li', `finding ${f.level}`);
+      li.append(el('span', `tag ${f.level}`, t(`level.${f.level}`)), el('span', 'finding-text', findingText(f)));
+      return li;
+    }));
+  }
+
+  function renderTimes(result, now) {
+    $('times-now').textContent = t('decode.now', { iso: C.toIso(now), unix: now, leeway: C.DEFAULT_LEEWAY });
+    const rows = ['exp', 'nbf', 'iat'].filter((claim) => result.times[claim].state !== 'missing');
+    $('times-card').hidden = rows.length === 0;
+    $('times-body').replaceChildren(...rows.map((claim) => {
+      const info = result.times[claim];
+      const th = el('th', '', claim);
+      th.scope = 'row';
+      const known = info.state !== 'type';
+      const tr = el('tr');
+      tr.append(th, el('td', 'mono', known ? String(info.value) : JSON.stringify(info.value)),
+        el('td', 'mono', known ? info.iso : '-'), el('td', '', known ? toLocal(info.value) : '-'),
+        el('td', '', t(`time.${info.state}`)));
+      return tr;
+    }));
+  }
+
+  function renderClaims(token) {
+    const rows = C.REGISTERED_CLAIMS.filter((c) => token.payload[c] !== undefined);
+    $('claims-card').hidden = rows.length === 0;
+    $('claims-body').replaceChildren(...rows.map((claim) => {
+      const th = el('th', '', claim);
+      th.scope = 'row';
+      const value = token.payload[claim];
+      const tr = el('tr');
+      tr.append(th, el('td', 'mono', typeof value === 'string' ? value : JSON.stringify(value)), el('td', '', t(`claim.${claim}`)));
+      return tr;
+    }));
+  }
+
+  function renderDecode() {
+    const text = $('jwt-input').value;
+    const status = $('decode-status');
+    const box = $('decode-result');
+    if (!text.trim()) {
+      state.token = null;
+      status.classList.remove('error');
+      status.textContent = t('decode.prompt');
+      box.hidden = true;
+      renderVerifyHeaderAlg();
+      return;
+    }
+    const token = C.parseToken(text);
+    if (!token.ok) {
+      state.token = null;
+      status.classList.add('error');
+      status.textContent = errorText(token);
+      box.hidden = true;
+      renderVerifyHeaderAlg();
+      return;
+    }
+    state.token = token;
+    status.classList.remove('error');
+    status.textContent = '';
+    box.hidden = false;
     const now = nowSec();
-    if (typeof payload.exp === 'number') {
-      if (payload.exp < now) out.push(['ng', `exp（有効期限）切れ：${payload.exp} < now(${now})`]);
-    } else {
-      out.push(['warn', 'exp（有効期限）が未設定です。']);
-    }
-    if (typeof payload.nbf === 'number' && payload.nbf > now) {
-      out.push(['ng', `nbf（有効化前）：${payload.nbf} > now(${now})`]);
-    }
-    if (typeof payload.iat === 'number' && payload.iat > now + 60) {
-      out.push(['warn', `iat（発行時刻）が将来に設定されています：${payload.iat}`]);
-    }
-    if (payload.aud && typeof payload.aud === 'string' && payload.aud.length === 0) {
-      out.push(['warn', 'audが空文字です。']);
-    }
-    out.push(['ok', 'デコード完了。署名検証は別タブで実施できます。']);
+    const result = C.lint(token, now);
+    renderParts(token);
+    renderFindings(result);
+    renderTimes(result, now);
+    renderClaims(token);
+    renderVerifyHeaderAlg();
   }
 
-  return out;
-}
-
-function renderLint(list) {
-  const ul = $('#lintList');
-  ul.innerHTML = '';
-  list.forEach(([level, msg]) => {
-    const li = document.createElement('li');
-    li.textContent = msg;
-    li.classList.add(level);
-    ul.appendChild(li);
+  for (const b of document.querySelectorAll('[data-sample]')) {
+    b.addEventListener('click', () => {
+      $('jwt-input').value = S.decode[b.dataset.sample];
+      renderDecode();
+    });
+  }
+  $('btn-clear').addEventListener('click', () => {
+    $('jwt-input').value = '';
+    renderDecode();
+    $('decode-status').textContent = t('decode.cleared');
   });
-}
+  $('jwt-input').addEventListener('input', renderDecode);
 
-// --- verify ---
-async function verifyHS256(jwt, secretText) {
-  const { h, p, s } = parseJwtParts(jwt);
-  const data = new TextEncoder().encode(`${h}.${p}`);
-  const sig = b64urlToUint8Array(s);
-
-  const key = await crypto.subtle.importKey(
-    'raw',
-    new TextEncoder().encode(secretText),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['verify']
-  );
-  const ok = await crypto.subtle.verify('HMAC', key, sig, data);
-  return ok;
-}
-
-function pemToBinary(pem) {
-  const clean = pem.replace(/-----BEGIN PUBLIC KEY-----/, '')
-                   .replace(/-----END PUBLIC KEY-----/, '')
-                   .replace(/\s+/g, '');
-  const raw = atob(clean);
-  const buf = new Uint8Array(raw.length);
-  for (let i = 0; i < raw.length; i++) buf[i] = raw.charCodeAt(i);
-  return buf.buffer;
-}
-
-async function verifyRS256(jwt, publicKeyPem) {
-  const { h, p, s } = parseJwtParts(jwt);
-  const data = new TextEncoder().encode(`${h}.${p}`);
-  const sig = b64urlToUint8Array(s);
-
-  const key = await crypto.subtle.importKey(
-    'spki',
-    pemToBinary(publicKeyPem),
-    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
-    false,
-    ['verify']
-  );
-  const ok = await crypto.subtle.verify({ name: 'RSASSA-PKCS1-v1_5' }, key, sig, data);
-  return ok;
-}
-
-// --- UI bindings ---
-function initDecode() {
-  $('#btnDecode').addEventListener('click', () => {
-    const jwt = $('#jwtInput').value.trim();
-    if (!jwt) return;
-
-    try {
-      const { h, p, s } = parseJwtParts(jwt);
-      const header = safeJsonParse(b64urlToUint8Array(h));
-      const payload = safeJsonParse(b64urlToUint8Array(p));
-
-      $('#headerOut').textContent = pretty(header);
-      $('#payloadOut').textContent = pretty(payload);
-      $('#sigOut').textContent = s || '';
-
-      const lint = lintJwt(header, payload);
-      renderLint(lint);
-    } catch (e) {
-      $('#headerOut').textContent = '';
-      $('#payloadOut').textContent = '';
-      $('#sigOut').textContent = '';
-      renderLint([['ng', e.message]]);
-    }
-  });
-
-  // サンプル1: 正常なJWT（将来の有効期限）
-  $('#btnSample1').addEventListener('click', () => {
-    const sampleJwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNzM0OTU5OTk5LCJleHAiOjE4NjY0OTU5OTksInJvbGUiOiJ1c2VyIiwiZW1haWwiOiJqb2huLmRvZUBleGFtcGxlLmNvbSJ9.d6HKTzQ5J2H-m1pLZYh0KcJhJ9YnCzWxTmYhAz4N0xE';
-    $('#jwtInput').value = sampleJwt;
-    document.getElementById('btnDecode').click();
-  });
-
-  // サンプル2: 期限切れJWT
-  $('#btnSample2').addEventListener('click', () => {
-    const sampleJwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyLCJleHAiOjE1MTYyNDI2MjIsInJvbGUiOiJ1c2VyIiwiZW1haWwiOiJqb2huLmRvZUBleGFtcGxlLmNvbSJ9.79mMsGNl90k1w0XL4gGe4iWjW9Ni8ZWnJnTGpuZQYTI';
-    $('#jwtInput').value = sampleJwt;
-    document.getElementById('btnDecode').click();
-  });
-
-  // サンプル3: alg=none JWT（署名なし、危険）
-  $('#btnSample3').addEventListener('click', () => {
-    const sampleJwt = 'eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkFkbWluIFVzZXIiLCJpYXQiOjE3MzQ5NTk5OTksImV4cCI6MTg2NjQ5NTk5OSwicm9sZSI6ImFkbWluIiwiZW1haWwiOiJhZG1pbkBleGFtcGxlLmNvbSJ9.';
-    $('#jwtInput').value = sampleJwt;
-    document.getElementById('btnDecode').click();
-  });
-
-  $('#btnClear').addEventListener('click', () => {
-    $('#jwtInput').value = '';
-    $('#headerOut').textContent = '';
-    $('#payloadOut').textContent = '';
-    $('#sigOut').textContent = '';
-    renderLint([]);
-  });
-}
-
-function initVerify() {
-  const algSelect = $('#algSelect');
-  const hsBox = $('#hsKeyBox');
-  const rsBox = $('#rsKeyBox');
-
-  // クイック検証：HS256サンプル
-  $('#btnQuickHS256').addEventListener('click', async () => {
-    const sampleJwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNzM0OTU5OTk5LCJleHAiOjE4NjY0OTU5OTksInJvbGUiOiJ1c2VyIn0.UWrEuNWNd6F8WOjpOOtZi8pgtP5X6KrSDFhvqXhUa4c';
-    const sampleKey = 'my-secret-key-for-demo';
-    
-    // JWTを入力欄に設定
-    $('#jwtInput').value = sampleJwt;
-    
-    // HS256モードに切り替え
-    algSelect.value = 'HS256';
-    hsBox.classList.remove('hidden');
-    rsBox.classList.add('hidden');
-    $('#hsKey').value = sampleKey;
-    
-    // 検証実行
-    await performVerification(sampleJwt, 'HS256', sampleKey);
-  });
-
-  // クイック検証：RS256サンプル
-  $('#btnQuickRS256').addEventListener('click', async () => {
-    const sampleJwt = 'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNzM0OTU5OTk5LCJleHAiOjE4NjY0OTU5OTksInJvbGUiOiJ1c2VyIn0.demo_signature_for_educational_purposes_only';
-    const samplePubKey = `-----BEGIN PUBLIC KEY-----
-MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA3VoPN9PKUjKFLMwOge9JlM0HJP8gqfvRAat6KH4t29Rr4Y6HTG6rYOLz9JiNsQjlxEJ4qfrA0K8G6H0eP34I2H+X6qT3Pn8t2wEJ4Jz7Qk5P3t4Q+Xb7EQf1Rz0O9Fvz6BQzYw8Q3l0e6+xQ4h4K6+a6+qwO3jXzO3K1LQQ3g3jNQ3eXQ3o4+Q3p5+Q6w7xQ8yQ9R0AQ1R2BQ3RQ4R5Q6R7Q8R9S0AS1S2BS3SQ4S5S6S7S8S9T0AT1T2BT3TQ4T5T6T7T8T9U0AU1U2BU3UQ4U5U6U7U8U9V0AV1V2BV3VQ4V5V6V7V8V9W0AW1W2BW3WQ4W5W6W7W8W9X0AX1X2BX3XQ4X5X6X7X8X9Y0AY1Y2BY3YQ4Y5Y6Y7Y8Y9Z0AZ1Z2BZ3ZQIDAQAB
------END PUBLIC KEY-----`;
-    
-    // JWTを入力欄に設定
-    $('#jwtInput').value = sampleJwt;
-    
-    // RS256モードに切り替え
-    algSelect.value = 'RS256';
-    rsBox.classList.remove('hidden');
-    hsBox.classList.add('hidden');
-    $('#rsPubKey').value = samplePubKey;
-    
-    // 検証実行（RS256はデモ用なので失敗するが、UIの動作確認は可能）
-    await performVerification(sampleJwt, 'RS256', samplePubKey);
-  });
-
-  algSelect.addEventListener('change', () => {
-    const v = algSelect.value;
-    if (v === 'HS256') { hsBox.classList.remove('hidden'); rsBox.classList.add('hidden'); }
-    else { rsBox.classList.remove('hidden'); hsBox.classList.add('hidden'); }
-  });
-
-  // 共通の検証処理
-  async function performVerification(jwt, algorithm, keyData) {
-    const result = $('#verifyResult');
-    result.classList.remove('ok', 'ng');
-    result.textContent = '検証中...';
-
-    try {
-      let ok = false;
-      if (algorithm === 'HS256') {
-        ok = await verifyHS256(jwt, keyData);
-      } else if (algorithm === 'RS256') {
-        ok = await verifyRS256(jwt, keyData);
-      } else {
-        throw new Error(`未対応のアルゴリズム：${algorithm}`);
+  for (const b of document.querySelectorAll('[data-copy]')) {
+    b.addEventListener('click', async () => {
+      const part = b.dataset.copy;
+      const name = t(`decode.${part}`);
+      try {
+        if (!navigator.clipboard) throw new Error('clipboard');
+        await navigator.clipboard.writeText(state.copy[part] || '');
+        $('copy-status').textContent = t('decode.copied', { name });
+      } catch {
+        $('copy-status').textContent = t('decode.copyFailed');
       }
+    });
+  }
+  renders.push(renderDecode);
 
-      if (ok) {
-        result.textContent = '署名検証：OK ✅ 署名が正当です';
-        result.classList.add('ok');
-      } else {
-        result.textContent = '署名検証：NG ❌ 署名が不正か、鍵が間違っています';
-        result.classList.add('ng');
-      }
-    } catch (e) {
-      const errorMessage = e.message || e.toString() || '検証処理でエラーが発生しました';
-      result.textContent = `検証エラー：${errorMessage}`;
-      result.classList.add('ng');
-      console.error('performVerification エラー:', e);
-    }
+  // ===== 署名検証 =====
+  const algSelect = $('alg-select');
+  for (const alg of C.ALG_NAMES) {
+    const option = document.createElement('option');
+    option.value = alg;
+    option.textContent = alg;
+    algSelect.append(option);
   }
 
-  $('#btnVerify').addEventListener('click', async () => {
-    const jwt = $('#jwtInput').value.trim();
-    if (!jwt) { 
-      const result = $('#verifyResult');
-      result.textContent = 'JWTを先に入力してください。デコードタブでJWTを入力してからお試しください。';
-      result.classList.remove('ok');
-      result.classList.add('ng');
-      return; 
-    }
+  // HS は共有鍵、それ以外は公開鍵（PEM か JWK）
+  const keyGroup = () => (C.ALGORITHMS[algSelect.value].family === 'HS' ? 'HS' : 'RS');
 
+  function renderKeyLabels() {
+    const group = keyGroup();
+    $('key-label').textContent = t(`verify.keyLabel.${group}`);
+    $('key-hint').textContent = t(`verify.keyHint.${group}`);
+  }
+
+  function renderVerifyHeaderAlg() {
+    const alg = state.token && state.token.header ? state.token.header.alg : undefined;
+    const known = typeof alg === 'string';
+    $('verify-header-alg').textContent = known ? t('verify.headerAlg', { alg }) : t('verify.headerAlgNone');
+    $('btn-use-header-alg').disabled = !known || !C.ALGORITHMS[alg];
+  }
+
+  const renderVerify = () => {
+    renderKeyLabels();
+    renderVerifyHeaderAlg();
+  };
+
+  algSelect.addEventListener('change', renderKeyLabels);
+  $('btn-use-header-alg').addEventListener('click', () => {
+    const alg = state.token && state.token.header ? state.token.header.alg : undefined;
+    if (typeof alg === 'string' && C.ALGORITHMS[alg]) {
+      algSelect.value = alg;
+      renderKeyLabels();
+    }
+  });
+
+  for (const b of document.querySelectorAll('[data-verify-sample]')) {
+    b.addEventListener('click', () => {
+      const sample = S.verify[b.dataset.verifySample];
+      $('jwt-input').value = sample.token;
+      algSelect.value = sample.alg;
+      $('key-input').value = sample.key;
+      renderDecode();
+      renderKeyLabels();
+    });
+  }
+
+  function showVerifyResult(level, text, notes) {
+    const box = $('verify-result');
+    box.className = level ? `verdict ${level}` : 'verdict';
+    box.textContent = text;
+    $('verify-notes').replaceChildren(...(notes || []).map(([noteLevel, noteText]) => {
+      const li = el('li', `finding ${noteLevel}`);
+      li.append(el('span', `tag ${noteLevel}`, t(`level.${noteLevel}`)), el('span', 'finding-text', noteText));
+      return li;
+    }));
+  }
+
+  $('btn-verify').addEventListener('click', async () => {
+    const token = C.parseToken($('jwt-input').value);
+    if (!token.ok) {
+      showVerifyResult('danger', errorText(token), []);
+      return;
+    }
     const alg = algSelect.value;
-    
-    try {
-      if (alg === 'HS256') {
-        const secret = $('#hsKey').value.trim();
-        if (!secret) throw new Error('HS鍵が未入力です。共有秘密鍵を入力してください。');
-        await performVerification(jwt, 'HS256', secret);
-      } else if (alg === 'RS256') {
-        const pem = $('#rsPubKey').value.trim();
-        if (!pem) throw new Error('RS公開鍵が未入力です。PEM形式の公開鍵を入力してください。');
-        if (!/^-----BEGIN PUBLIC KEY-----/.test(pem)) throw new Error('公開鍵PEMの形式が不正です。"-----BEGIN PUBLIC KEY-----"で始まる形式で入力してください。');
-        await performVerification(jwt, 'RS256', pem);
-      } else {
-        throw new Error(`未対応のアルゴリズムです：${alg}`);
-      }
-    } catch (e) {
-      const result = $('#verifyResult');
-      const errorMessage = e.message || e.toString() || '不明なエラーが発生しました';
-      result.textContent = `エラー：${errorMessage}`;
-      result.classList.remove('ok');
-      result.classList.add('ng');
-      console.error('署名検証エラー:', e);
+    showVerifyResult('', t('verify.running'), []);
+    const r = await V.verify(token, alg, $('key-input').value);
+    if (!r.ok) {
+      showVerifyResult('danger', verifyErrorText(r), []);
+      return;
     }
+    const notes = [];
+    if (r.mismatch) notes.push(['warn', t('verify.mismatch', { alg: r.alg, headerAlg: r.headerAlg })]);
+    for (const w of r.warnings) notes.push(['danger', t(`verr.${w.code}`, w.vars)]);
+    if (r.keyBits) notes.push(['info', t('verify.keyBits', { bits: r.keyBits })]);
+    notes.push(['info', t(`verify.keyKind.${r.keyKind}`)]);
+    showVerifyResult(r.valid ? 'ok' : 'danger', t(r.valid ? 'verify.valid' : 'verify.invalid', { alg: r.alg }), notes);
   });
-}
+  renders.push(renderVerify);
 
-// --- init ---
-window.addEventListener('DOMContentLoaded', () => {
-  initTabs();
-  initDecode();
-  initVerify();
-});
+  // ===== テーマ・言語・初期表示 =====
+  const themeBtn = $('btn-theme');
+  themeBtn.addEventListener('click', () => Theme.toggle(themeBtn));
+
+  function applyLanguage() {
+    I18n.applyStaticText();
+    Theme.refresh(themeBtn);
+    for (const render of renders) render();
+  }
+
+  // 切り替えたら、URL に ?lang= があればそれも書き換える（再読み込みで元の言語に戻らないように）
+  $('btn-lang').addEventListener('click', () => {
+    I18n.set(I18n.lang === 'ja' ? 'en' : 'ja');
+    const url = new URL(location.href);
+    if (url.searchParams.has('lang')) {
+      url.searchParams.set('lang', I18n.lang);
+      history.replaceState(null, '', url);
+    }
+    applyLanguage();
+  });
+
+  I18n.init();
+  applyLanguage();
+})();
