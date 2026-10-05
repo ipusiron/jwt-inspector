@@ -4,53 +4,63 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-JWT Inspector is a client-side web application for decoding and verifying JSON Web Tokens (JWTs). The tool provides security linting and educational features for JWT analysis without sending tokens to external servers.
+JWT Inspector decodes JWTs in the browser, lints them against RFC 7519 and RFC 8725, and verifies HS, RS, PS and ES signatures with Web Crypto. Part of the "生成AIで作るセキュリティツール100" (100 Security Tools with Generative AI) project, Day053.
 
-## Architecture
-
-- **Pure HTML/CSS/JS**: No build process or dependencies required
-- **Client-side only**: All JWT processing happens in the browser using Web Crypto API
-- **Three main tabs**: Decode, Verify, Learn
-- **Web Crypto API usage**: 
-  - HS256: HMAC-SHA-256
-  - RS256: RSA-PKCS1-v1_5 + SHA-256 (not RSA-PSS)
-
-## File Structure
-
-- `index.html`: Main application interface with tabbed UI
-- `script.js`: Core JWT processing logic, Web Crypto operations, and UI handlers
-- `style.css`: Light theme styling with CSS custom properties and responsive design
-- `README.md`: Japanese documentation with project details
-
-## Key Functions
-
-### JWT Processing (`script.js`)
-- `parseJwtParts()`: Splits JWT into header.payload.signature
-- `b64urlToUint8Array()` / `uint8ArrayToB64url()`: Base64URL encoding/decoding
-- `lintJwt()`: Security analysis (alg=none, expiration, weak patterns)
-- `verifyHS256()` / `verifyRS256()`: Signature verification using Web Crypto API
-
-### Security Linting Rules
-- Rejects `alg=none` tokens
-- Validates expiration (`exp`) and not-before (`nbf`) claims
-- Warns about future-dated `iat` claims
-- Checks for `kid` header (directory traversal risks)
-- Validates PEM format for RS256 public keys
+**Live demo**: https://ipusiron.github.io/jwt-inspector/
 
 ## Development Commands
 
-This is a static web application with no build process:
-- Open `index.html` directly in browser for local testing
-- Deploy by hosting static files (currently on GitHub Pages)
+Static site with no build process and no dependencies.
 
-## Security Focus
+```bash
+npm test                    # node --test (Node.js 22+), no dependencies
+python -m http.server 8000  # serve locally
+```
 
-This tool is designed for **defensive security analysis only**:
-- Educational JWT security demonstrations
-- Client-side token analysis (no external transmission)
-- Security vulnerability identification and teaching
-- Best practices guidance for JWT implementation
+## Code Architecture
 
-## Future Enhancement Ideas
+- `index.html` - 3 tab panels (decode / verify / learn). No `style` attributes, no inline scripts or handlers. Static text has `data-i18n` keys whose Japanese text must equal the dictionary (tested). The token and key fields carry `spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off"` so that pasted secrets are not sent to an external spell checker
+- `script.js` - DOM layer only. One state object (`state.token`), redrawn by `renderDecode` / `renderVerify`; `renders` are re-run on language switch. Lint codes become message keys (`lint.<code>`, `err.<code>`, `verr.<code>`)
+- `js/jwt-core.js` - parsing and linting (`globalThis.JwtCore`, no DOM):
+  - `decodeB64url` / `encodeB64url` check every character and distinguish `b64.padding` (=), `b64.standard` (+ /), `b64.char` and `b64.length`; `loose` marks non-zero leftover bits
+  - `parseJsonObject` requires a JSON object (RFC 7515 §4), and `duplicateKeys` finds repeated member names that `JSON.parse` would silently collapse
+  - `parseToken` returns `{ raw, signingInput, header, payload, signature, duplicates }`, or a failure whose code is prefixed with `header.` / `payload.` / `signature.`
+  - `timeStatus` applies RFC 7519 §4.1.4–§4.1.6 with `DEFAULT_LEEWAY` 60 s; **exp at the same second counts as expired**
+  - `lint` returns `{ findings, times }`; findings are `{ level, code, vars }` with level `danger | warn | info | ok`. `duration` rounds seconds to the largest unit for display
+  - `ALGORITHMS` holds the 12 verifiable algorithms; `KNOWN_UNSUPPORTED` holds names the tool recognises but cannot verify
+- `js/jwt-verify.js` - verification (`globalThis.JwtVerify`):
+  - `verify(token, alg, key)` uses **only** the algorithm passed in, never `header.alg` (RFC 8725 §3.1), and returns `mismatch` when they differ
+  - keys: HS as raw UTF-8, others as PEM SPKI or JWK. `pem.private`, `pem.pkcs1`, `pem.certificate`, `jwk.private`, `jwk.set` are rejected with those codes
+  - `keyWarnings` applies RFC 7518 §3.2 (`MIN_HS_BITS`) and §3.3/§3.5 (`MIN_RSA_BITS` 2048)
+  - PS uses `saltLength = bits / 8`; ES uses the curve from the algorithm
+- `js/samples.js` - sample tokens and keys. **Public keys and the demo shared secret only**; the private keys live outside this repository (ipusiron-work `ref/day053/`), and a test asserts no private material is present
+- `js/messages.js` - Japanese and English dictionaries with the same keys (`JwtMessages.t(key, vars, lang)`)
+- `js/i18n.js`, `js/theme-init.js`, `js/theme.js` - language and theme; localStorage access is always in `try`
+- `style.css` - color tokens on `:root`, dark via `prefers-color-scheme` and `[data-theme="dark"]` (same values). `.btn.primary:hover` must also set `background`, because `.btn:hover:not(:disabled)` has the same specificity
 
-See `FUTURE_IDEAS.md` for a comprehensive list of potential enhancements (UI/UX, additional algorithms, security features, etc.).
+## Samples and test vectors
+
+`test/fixtures.json` and `js/samples.js` are generated by `business/research/try100_audit/ref/day053/make_samples.mjs` in the ipusiron-work repository, which signs with real keys via Node `crypto`. Regenerate there and copy; do not hand-edit the tokens. The demo shared secret is 64 bytes so that even HS512 meets RFC 7518 §3.2.
+
+## Security Considerations
+
+- CSP in `<meta>`: `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'` (no `unsafe-inline`)
+- No network requests at all: JWK Sets and `jku` URLs are deliberately not fetched
+- All output is built with DOM APIs and `textContent` (no `innerHTML`; tested)
+- Nothing is stored except the language and theme choices
+
+## Tests
+
+- `test/core.test.js` - Base64url round trips and errors, duplicate member names, token parsing with prefixed error codes, time verdicts incl. leeway, every lint item
+- `test/verify.test.js` - all 12 algorithms from PEM and JWK, flipped signature bits, a rewritten payload, the RS256→HS256 public-key swap, key length warnings, malformed keys
+- `test/html.test.js` - CSP, tab ARIA, labels, `aria-live`, spellcheck attributes, dictionary agreement, ids used by script.js, no innerHTML/style writes, no private keys in samples
+- `test/contrast.test.js` - text 4.5:1 and borders 3:1 in light and dark, 44px controls, 16px inputs
+- `test/messages.test.js`, `test/i18n.test.js` - every code the core can return has a message, no Japanese in the English dictionary, language selection
+- `test/readme.test.js` - both READMEs (same headings), YAML structure, the lint and algorithm tables checked against the core, directory tree, images (7 screenshots each)
+- `test/format.test.js` - line length (js/samples.js is data and exempt), LF, final newline
+
+README numbers are checked by tests — update them from the core, not by hand. README states only what is true for the current version. Screenshots are taken with `business/research/try100_audit/impl/shots/day053_shots.py` in the ipusiron-work repository.
+
+## Deployment
+
+GitHub Pages from the `main` branch root: https://ipusiron.github.io/jwt-inspector/ (`.nojekyll` disables Jekyll).
