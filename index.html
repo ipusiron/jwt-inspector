@@ -1,174 +1,217 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="description" content="JWT Inspector - JWTをブラウザーの中だけでデコードし、RFCに沿って検査して、HS・RS・PS・ESの署名を検証する学習ツール">
+  <meta name="author" content="ipusiron">
+  <meta name="color-scheme" content="light dark">
+  <link rel="icon" href="data:,">
+  <script src="js/theme-init.js"></script>
   <title>JWT Inspector</title>
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <header class="container">
-    <h1>🔍 JWT Inspector</h1>
-    <p class="subtitle">ブラウザー上でJWTを安全にデコード・検証し、セキュリティリスクを自動検出するツール</p>
+  <header class="site-header">
+    <div class="header-row">
+      <div class="header-spacer"></div>
+      <h1>JWT Inspector</h1>
+      <div class="header-actions">
+        <button type="button" id="btn-lang" class="icon-btn" data-i18n="ui.langButton" data-i18n-attr="aria-label:ui.langLabel;title:ui.langLabel"
+          aria-label="Switch to English" title="Switch to English">English</button>
+        <button type="button" id="btn-theme" class="icon-btn" aria-label="ダークモードに切り替える" title="ダークモードに切り替える">🌙</button>
+      </div>
+    </div>
+    <p class="subtitle" data-i18n="ui.subtitle">JWTをブラウザーの中だけでデコードし、RFCに沿って検査して、HS・RS・PS・ESの署名を検証する学習ツール</p>
   </header>
 
-  <main class="container card">
-    <div class="tabs">
-      <button class="tab-button active" data-tab="decode">🔓 デコード</button>
-      <button class="tab-button" data-tab="verify">✅ 検証</button>
-      <button class="tab-button" data-tab="learn">📚 学習</button>
-    </div>
+  <noscript><p class="noscript" data-i18n="ui.noscript">このページはJavaScriptで動きます。JavaScriptを有効にしてから開き直してください。</p></noscript>
 
-    <section id="decode" class="tab-content active">
-      <div class="input-header">
-        <label for="jwtInput" class="label">JWTトークン</label>
-        <div class="sample-buttons">
-          <button id="btnSample1" class="sample-button">📝 正常なJWT</button>
-          <button id="btnSample2" class="sample-button">⚠️ 期限切れJWT</button>
-          <button id="btnSample3" class="sample-button">🚨 alg=none JWT</button>
-        </div>
-      </div>
-      <textarea id="jwtInput" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c
+  <nav class="tabs" role="tablist" data-i18n-attr="aria-label:ui.tabsLabel" aria-label="表示の切り替え">
+    <button type="button" class="tab-btn" role="tab" id="tab-decode" data-tab="decode" aria-controls="panel-decode" aria-selected="true"
+      data-i18n="tab.decode">デコードと検査</button>
+    <button type="button" class="tab-btn" role="tab" id="tab-verify" data-tab="verify" aria-controls="panel-verify" aria-selected="false" tabindex="-1"
+      data-i18n="tab.verify">署名検証</button>
+    <button type="button" class="tab-btn" role="tab" id="tab-learn" data-tab="learn" aria-controls="panel-learn" aria-selected="false" tabindex="-1"
+      data-i18n="tab.learn">学習</button>
+  </nav>
 
-JWTトークンをここに貼り付けてください..."></textarea>
-      <div class="actions">
-        <button id="btnDecode">🔍 デコード実行</button>
-        <button id="btnClear">🗑️ クリア</button>
-      </div>
+  <main class="container">
+    <!-- ===== デコードと検査 ===== -->
+    <section class="tabpanel" id="panel-decode" role="tabpanel" aria-labelledby="tab-decode" tabindex="0">
+      <h2 data-i18n="decode.title">デコードと検査</h2>
+      <p data-i18n="decode.lead">JWTを貼り付けると、ヘッダーとペイロードをデコードし、RFC 7519・RFC 8725に沿って検査します。入力はこのページの中だけで処理し、どこにも送りません。</p>
 
-      <div class="grid-2">
-        <div>
-          <h3>📋 Header（ヘッダー）</h3>
-          <pre id="headerOut" class="code"></pre>
+      <div class="card">
+        <label class="field-label" for="jwt-input" data-i18n="decode.inputLabel">JWT（header.payload.signature）</label>
+        <textarea id="jwt-input" class="text-area" rows="5" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off"></textarea>
+        <div class="sample-row">
+          <span class="sample-label" data-i18n="decode.samples">例を入れる</span>
+          <button type="button" class="btn small" data-sample="valid" data-i18n="decode.sample.valid">正常なトークン</button>
+          <button type="button" class="btn small" data-sample="expired" data-i18n="decode.sample.expired">期限切れ</button>
+          <button type="button" class="btn small" data-sample="none" data-i18n="decode.sample.none">alg=none</button>
+          <button type="button" class="btn small" data-sample="risky" data-i18n="decode.sample.risky">危ないヘッダー</button>
+          <button type="button" class="btn small" id="btn-clear" data-i18n="decode.clear">クリア</button>
         </div>
-        <div>
-          <h3>📦 Payload（ペイロード）</h3>
-          <pre id="payloadOut" class="code"></pre>
-        </div>
+        <p id="decode-status" class="status" aria-live="polite"></p>
       </div>
 
-      <h3>🔐 署名（Base64URL）</h3>
-      <pre id="sigOut" class="code"></pre>
+      <div id="decode-result" hidden>
+        <div class="card">
+          <div class="parts">
+            <article class="part part-header">
+              <div class="part-head">
+                <h3 data-i18n="decode.header">ヘッダー</h3>
+                <button type="button" class="btn small" id="copy-header" data-copy="header" data-i18n="decode.copy">コピー</button>
+              </div>
+              <pre class="mono out-text" id="out-header"></pre>
+            </article>
+            <article class="part part-payload">
+              <div class="part-head">
+                <h3 data-i18n="decode.payload">ペイロード</h3>
+                <button type="button" class="btn small" id="copy-payload" data-copy="payload" data-i18n="decode.copy">コピー</button>
+              </div>
+              <pre class="mono out-text" id="out-payload"></pre>
+            </article>
+          </div>
+          <h3 id="signature-title"></h3>
+          <pre class="mono out-text" id="out-signature"></pre>
+          <p id="copy-status" class="status" aria-live="polite"></p>
+        </div>
 
-      <h3>⚠️ Lint（セキュリティチェック）</h3>
-      <ul id="lintList" class="lint"></ul>
+        <div class="card">
+          <h3 data-i18n="decode.findings">検査の結果</h3>
+          <p id="findings-summary" class="status" aria-live="polite"></p>
+          <ul class="findings" id="findings-list"></ul>
+        </div>
+
+        <div class="card" id="times-card">
+          <h3 data-i18n="decode.times">時刻のクレーム</h3>
+          <p id="times-now" class="note"></p>
+          <div class="table-wrap">
+            <table class="times-table">
+              <thead>
+                <tr>
+                  <th scope="col" data-i18n="decode.col.time">クレーム</th>
+                  <th scope="col" data-i18n="decode.col.unix">UNIX時間</th>
+                  <th scope="col" data-i18n="decode.col.utc">UTC</th>
+                  <th scope="col" data-i18n="decode.col.local">この端末の時刻</th>
+                  <th scope="col" data-i18n="decode.col.state">判定</th>
+                </tr>
+              </thead>
+              <tbody id="times-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card" id="claims-card">
+          <h3 data-i18n="decode.claims">クレームの意味</h3>
+          <div class="table-wrap">
+            <table class="claims-table">
+              <thead>
+                <tr>
+                  <th scope="col" data-i18n="decode.col.claim">クレーム</th>
+                  <th scope="col" data-i18n="decode.col.value">値</th>
+                  <th scope="col" data-i18n="decode.col.meaning">意味</th>
+                </tr>
+              </thead>
+              <tbody id="claims-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     </section>
 
-    <section id="verify" class="tab-content">
-      <div class="verify-explanation">
-        <h3>🔒 署名検証とは？</h3>
-        <p>JWTの署名検証は、トークンが<strong>改ざんされていないか</strong>、<strong>正当な発行者</strong>によって作られたかを確認する重要なセキュリティ機能です。</p>
-        <ul class="explanation-list">
-          <li><strong>HS256</strong>: 発行者と検証者が同じ秘密鍵を共有する方式</li>
-          <li><strong>RS256</strong>: 発行者が秘密鍵で署名し、検証者が公開鍵で検証する方式</li>
+    <!-- ===== 署名検証 ===== -->
+    <section class="tabpanel" id="panel-verify" role="tabpanel" aria-labelledby="tab-verify" tabindex="0" hidden>
+      <h2 data-i18n="verify.title">署名検証</h2>
+      <p data-i18n="verify.lead">検証するアルゴリズムは、ヘッダーのalgではなく、ここで選んだものを使います。RFC 8725 §3.1は、検証側が使うアルゴリズムを決めることを求めています。</p>
+
+      <div class="card">
+        <p class="note" data-i18n="verify.tokenShared">デコードのタブと同じ入力欄を使います。</p>
+        <p id="verify-header-alg" class="status" aria-live="polite"></p>
+        <div class="field-row">
+          <div class="field">
+            <label class="field-label" for="alg-select" data-i18n="verify.algLabel">検証に使うアルゴリズム</label>
+            <select id="alg-select" class="select"></select>
+          </div>
+          <button type="button" class="btn small" id="btn-use-header-alg" data-i18n="verify.useHeaderAlg">ヘッダーのalgに合わせる</button>
+        </div>
+        <label class="field-label" for="key-input" id="key-label"></label>
+        <textarea id="key-input" class="text-area" rows="4" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off"></textarea>
+        <p id="key-hint" class="note"></p>
+        <div class="sample-row">
+          <span class="sample-label" data-i18n="verify.samples">例を入れる</span>
+          <button type="button" class="btn small" data-verify-sample="HS256">HS256</button>
+          <button type="button" class="btn small" data-verify-sample="RS256">RS256 (PEM)</button>
+          <button type="button" class="btn small" data-verify-sample="PS256">PS256 (JWK)</button>
+          <button type="button" class="btn small" data-verify-sample="ES256">ES256 (JWK)</button>
+          <button type="button" class="btn small" data-verify-sample="weak" data-i18n="verify.sample.weak">弱い鍵（secret）</button>
+        </div>
+        <div class="btn-row">
+          <button type="button" class="btn primary" id="btn-verify" data-i18n="verify.run">署名を検証する</button>
+        </div>
+        <p id="verify-result" class="verdict" aria-live="polite"></p>
+        <ul class="findings" id="verify-notes"></ul>
+        <p class="note" data-i18n="verify.note">鍵もトークンも、このページの中だけで処理します。本番の鍵を入れるときは、自分の端末で開き、使い終わったら入力欄を消してください。</p>
+      </div>
+    </section>
+
+    <!-- ===== 学習 ===== -->
+    <section class="tabpanel" id="panel-learn" role="tabpanel" aria-labelledby="tab-learn" tabindex="0" hidden>
+      <h2 data-i18n="learn.title">学習</h2>
+      <p data-i18n="learn.lead">JWTの構造と、実装でつまずきやすい点をまとめます。出典はRFCの節を添えています。</p>
+
+      <div class="card">
+        <h3 data-i18n="learn.structure.title">JWTの構造</h3>
+        <p data-i18n="learn.structure.body">JWS Compact Serialization（RFC 7515 §7.1）は、ヘッダー・ペイロード・署名をそれぞれBase64urlにして、ドットでつないだ形です。Base64urlは末尾の=を付けません（§2）。署名は「ヘッダー.ペイロード」の文字列全体にかかります。ここを1文字でも変えると署名は合いません。</p>
+      </div>
+      <div class="card">
+        <h3 data-i18n="learn.readable.title">ペイロードは暗号化されていない</h3>
+        <p data-i18n="learn.readable.body">署名は改ざんを見つけるためのもので、中身を隠しません。ペイロードはBase64urlを戻すだけで誰でも読めます。秘密はトークンに入れず、必要ならJWE（RFC 7516）を使います。</p>
+      </div>
+      <div class="card">
+        <h3 data-i18n="learn.none.title">alg=noneとアルゴリズムの固定</h3>
+        <p data-i18n="learn.none.body">ヘッダーのalgをそのまま信じる実装では、algをnoneに書き換えたトークンが通ってしまいます（RFC 8725 §2.1）。RS256をHS256に変え、公開鍵をHMACの共有鍵として使わせる取り違えも知られています（CVE-2015-9235）。検証側が使うアルゴリズムと鍵を先に決め、ヘッダーの値で切り替えないことが対策です（§3.1）。</p>
+      </div>
+      <div class="card">
+        <h3 data-i18n="learn.key.title">鍵の強さ</h3>
+        <p data-i18n="learn.key.body">HMACの鍵は、ハッシュの出力以上の長さが要ります（RFC 7518 §3.2。HS256なら256ビット）。RSAは2048ビット以上です（§3.3）。人が覚えられるパスワードをHS256の鍵に直接使ってはいけません（RFC 8725 §3.5）。短い鍵のトークンは、手元で辞書を回すだけで鍵を当てられます。</p>
+      </div>
+      <div class="card">
+        <h3 data-i18n="learn.header.title">鍵の場所を指すヘッダー</h3>
+        <p data-i18n="learn.header.body">kidは鍵の識別子（RFC 7515 §4.1.4）で、この値で鍵を選ぶ実装はインジェクションの入口になります。jkuとx5uは鍵を取りに行くURL（§4.1.2）で、攻撃者の指す先へ要求を送らされる余地があります。jwkはトークン自身が公開鍵を運ぶ形です。いずれも、受け取った値をそのまま使わないことが対策です（RFC 8725 §3.10）。</p>
+      </div>
+      <div class="card">
+        <h3 data-i18n="learn.claims.title">時刻と相手の検証</h3>
+        <p data-i18n="learn.claims.body">expは「その時刻以後は受け付けない」、nbfは「その時刻より前は受け付けない」です（RFC 7519 §4.1.4・§4.1.5）。時計のずれのために数分の猶予を認めてよいとされています。issとaudも確かめ、自分宛てでないトークンを拒みます（RFC 8725 §3.8・§3.9）。</p>
+      </div>
+      <div class="card">
+        <h3 data-i18n="learn.refs.title">出典</h3>
+        <ul class="bullets">
+          <li><a href="https://www.rfc-editor.org/rfc/rfc7515" target="_blank" rel="noopener noreferrer" data-i18n="learn.ref.7515">RFC 7515 JSON Web Signature (JWS)</a></li>
+          <li><a href="https://www.rfc-editor.org/rfc/rfc7518" target="_blank" rel="noopener noreferrer" data-i18n="learn.ref.7518">RFC 7518 JSON Web Algorithms (JWA)</a></li>
+          <li><a href="https://www.rfc-editor.org/rfc/rfc7519" target="_blank" rel="noopener noreferrer" data-i18n="learn.ref.7519">RFC 7519 JSON Web Token (JWT)</a></li>
+          <li><a href="https://www.rfc-editor.org/rfc/rfc8725" target="_blank" rel="noopener noreferrer" data-i18n="learn.ref.8725">RFC 8725 JSON Web Token Best Current Practices</a></li>
         </ul>
-      </div>
-
-      <div class="verify-section">
-        <h3>📋 クイック検証</h3>
-        <p class="section-desc">事前に用意されたJWTとキーで簡単に署名検証を体験できます</p>
-        
-        <div class="verification-steps">
-          <div class="step">
-            <span class="step-number">1</span>
-            <span class="step-text">下のボタンを押すと、サンプルJWTと対応する鍵が自動入力されます</span>
-          </div>
-          <div class="step">
-            <span class="step-number">2</span>
-            <span class="step-text">署名の検証処理が実行され、結果が表示されます</span>
-          </div>
-          <div class="step">
-            <span class="step-number">3</span>
-            <span class="step-text">✅（成功）または❌（失敗）で署名の正当性が分かります</span>
-          </div>
-        </div>
-        
-        <div class="quick-verify-buttons">
-          <button id="btnQuickHS256" class="quick-verify-button">🔑 HS256サンプル検証</button>
-          <button id="btnQuickRS256" class="quick-verify-button">🏢 RS256サンプル検証</button>
-        </div>
-      </div>
-
-      <div class="verify-section">
-        <h3>🔧 手動検証</h3>
-        <p class="section-desc">独自のJWTと鍵で検証を行います</p>
-        
-        <div class="manual-steps">
-          <p><strong>手順:</strong></p>
-          <ol class="manual-step-list">
-            <li>デコードタブでJWTを入力・デコードしてください</li>
-            <li>下でアルゴリズム（HS256またはRS256）を選択</li>
-            <li>対応する鍵を入力して「署名検証実行」ボタンを押す</li>
-          </ol>
-        </div>
-        
-        <div class="form-row">
-          <label>アルゴリズム</label>
-          <select id="algSelect">
-            <option value="HS256">HS256 (HMAC-SHA-256)</option>
-            <option value="RS256">RS256 (RSA+SHA-256)</option>
-          </select>
-        </div>
-
-        <div id="hsKeyBox" class="form-row">
-          <label for="hsKey">HS鍵（UTF-8文字列）</label>
-          <input id="hsKey" type="text" placeholder="your-shared-secret" />
-        </div>
-
-        <div id="rsKeyBox" class="form-row hidden">
-          <label for="rsPubKey">RS公開鍵（PEM, -----BEGIN PUBLIC KEY-----）</label>
-          <textarea id="rsPubKey" placeholder="-----BEGIN PUBLIC KEY-----&#10;MIIBIjANBgkqhkiG9w0B...&#10;-----END PUBLIC KEY-----"></textarea>
-        </div>
-
-        <div class="actions">
-          <button id="btnVerify">🔒 署名検証実行</button>
-        </div>
-      </div>
-
-      <div id="verifyResult" class="verify-result">未検証</div>
-    </section>
-
-    <section id="learn" class="tab-content">
-      <h3>🚨 JWTのセキュリティ上の注意点</h3>
-      <div class="learn-cards">
-        <div class="learn-card danger">
-          <h4>⛔ alg=none は絶対禁止</h4>
-          <p>署名なしのトークンを許可すると、攻撃者が自由にトークンを偽造できます。</p>
-        </div>
-        
-        <div class="learn-card warning">
-          <h4>🔑 HS256の鍵の強度</h4>
-          <p>共有鍵が短い・推測可能だと総当たり攻撃のリスクがあります。十分に長くランダムな鍵を使用してください。</p>
-        </div>
-        
-        <div class="learn-card info">
-          <h4>🏢 RS256の鍵管理</h4>
-          <p>公開鍵を適切に配布・管理し、PEM/SPKI形式で正しく設定してください。</p>
-        </div>
-        
-        <div class="learn-card warning">
-          <h4>⏰ 有効期限の重要性</h4>
-          <p>exp（有効期限）とnbf（有効開始時刻）を必ず検証し、クライアント時刻のズレも考慮してください。</p>
-        </div>
-        
-        <div class="learn-card danger">
-          <h4>🆔 kidヘッダーの悪用</h4>
-          <p>kidでのキー選択時、ディレクトリトラバーサル等の攻撃に注意が必要です（サーバー側実装）。</p>
-        </div>
-      </div>
-      
-      <div class="notice">
-        <p><strong>📝 注意:</strong> 本ツールは教育・学習目的です。実運用ではセキュリティライブラリやフレームワークのベストプラクティスに従ってください。</p>
+        <p class="note" data-i18n="learn.notice">このツールは学習と検証のためのものです。検証はブラウザーの中だけで行い、入力はどこにも送りません。</p>
       </div>
     </section>
   </main>
 
-  <footer>
-    <div class="footer">
-      🔗 GitHubリポジトリはこちら（ <a href="https://github.com/ipusiron/jwt-inspector" target="_blank">ipusiron/jwt-inspector</a> ）
-    </div>
+  <footer class="site-footer">
+    <a href="https://github.com/ipusiron/jwt-inspector" target="_blank" rel="noopener noreferrer" data-i18n="ui.repo">GitHubリポジトリ（ipusiron/jwt-inspector）</a>
   </footer>
 
+  <script src="js/jwt-core.js"></script>
+  <script src="js/jwt-verify.js"></script>
+  <script src="js/samples.js"></script>
+  <script src="js/messages.js"></script>
+  <script src="js/i18n.js"></script>
+  <script src="js/theme.js"></script>
   <script src="script.js"></script>
 </body>
 </html>
