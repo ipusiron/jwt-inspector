@@ -110,7 +110,7 @@
         re.lastIndex = i;
         const m = re.exec(json);
         if (m && m.index === i) {
-          if (depth === 1) names.push(m[1]);
+          if (depth === 1) names.push(JSON.parse('"' + m[1] + '"'));
           i = re.lastIndex;
           continue;
         }
@@ -185,7 +185,11 @@
     }
     return { unit: 'second', n };
   }
-  const toIso = (sec) => new Date(sec * 1000).toISOString().replace('.000', '');
+  // NumericDateの範囲とJavaScriptの日時表示の範囲は異なる。表示できなくても検査は続ける。
+  const toIso = (sec) => {
+    const date = new Date(sec * 1000);
+    return Number.isNaN(date.getTime()) ? '-' : date.toISOString().replace('.000', '');
+  };
 
   // exp・nbf・iat を、いまの時刻と猶予で判定する
   function timeStatus(payload, now, leeway = DEFAULT_LEEWAY) {
@@ -228,7 +232,7 @@
     } else if (alg.toLowerCase() === 'none') {
       // 大文字小文字を区別せずに比べる実装では none として扱われうる（RFC 7515 §4.1.1 は区別すると定める）
       out.push(F('danger', 'alg.noneCase', { alg }));
-    } else if (!ALGORITHMS[alg]) {
+    } else if (!ALG_NAMES.includes(alg)) {
       const known = KNOWN_UNSUPPORTED.includes(alg);
       out.push(F(known ? 'info' : 'warn', known ? 'alg.unsupported' : 'alg.unknown', { alg }));
     } else {

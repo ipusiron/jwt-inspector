@@ -22,7 +22,7 @@
   const nowSec = () => Math.floor(Date.now() / 1000);
 
   // この端末の時計での表示（UTC は計算部の toIso）
-  const toLocal = (sec) => new Date(sec * 1000).toLocaleString();
+  const toLocal = (sec) => C.toIso(sec) === '-' ? '-' : new Date(sec * 1000).toLocaleString();
 
   // 秒数の値（left・ago・ahead）は、いちばん大きい単位に丸めてから文言に入れる
   const DURATION_VARS = ['left', 'ago', 'ahead'];
@@ -63,7 +63,7 @@
   });
 
   // ===== デコードと検査 =====
-  const state = { token: null, copy: {} };
+  const state = { token: null, copy: {}, copyFeedback: null, copyJob: 0, revision: 0, cleared: false, verify: null, verifyJob: 0 };
 
   function renderParts(token) {
     const pretty = (text) => JSON.stringify(JSON.parse(text), null, 2);
@@ -74,7 +74,31 @@
     const n = token.signature.length;
     $('signature-title').textContent = n ? t('decode.signature', { n }) : t('decode.signatureEmpty');
     $('out-signature').textContent = token.raw.signature;
-    for (const part of ['header', 'payload']) $(`copy-${part}`).setAttribute('aria-label', t('decode.copyLabel', { name: t(`decode.${part}`) }));
+    for (const part of ['header', 'payload']) {
+      $(`copy-${part}`).disabled = false;
+      $(`copy-${part}`).setAttribute('aria-label', t('decode.copyLabel', { name: t(`decode.${part}`) }));
+    }
+  }
+
+  function clearDecodeOutput() {
+    state.token = null;
+    state.copy = {};
+    state.copyFeedback = null;
+    for (const id of ['out-header', 'out-payload', 'out-signature', 'signature-title', 'findings-summary', 'times-now', 'copy-status']) {
+      $(id).textContent = '';
+    }
+    for (const id of ['findings-list', 'times-body', 'claims-body']) $(id).replaceChildren();
+    for (const id of ['decode-result', 'times-card', 'claims-card']) $(id).hidden = true;
+    for (const part of ['header', 'payload']) {
+      $(`copy-${part}`).disabled = true;
+      $(`copy-${part}`).removeAttribute('aria-label');
+    }
+  }
+
+  function renderCopyStatus() {
+    const feedback = state.copyFeedback;
+    $('copy-status').textContent = feedback
+      ? t(feedback.key, feedback.part ? { name: t(`decode.${feedback.part}`) } : undefined) : '';
   }
 
   function renderFindings(result) {
@@ -127,19 +151,17 @@
     const status = $('decode-status');
     const box = $('decode-result');
     if (!text.trim()) {
-      state.token = null;
+      clearDecodeOutput();
       status.classList.remove('error');
-      status.textContent = t('decode.prompt');
-      box.hidden = true;
+      status.textContent = t(state.cleared ? 'decode.cleared' : 'decode.prompt');
       renderVerifyHeaderAlg();
       return;
     }
     const token = C.parseToken(text);
     if (!token.ok) {
-      state.token = null;
+      clearDecodeOutput();
       status.classList.add('error');
       status.textContent = errorText(token);
-      box.hidden = true;
       renderVerifyHeaderAlg();
       return;
     }
@@ -156,33 +178,50 @@
     renderVerifyHeaderAlg();
   }
 
+  function tokenChanged(cleared = false) {
+    state.revision++;
+    state.copyJob++;
+    state.copyFeedback = null;
+    state.cleared = cleared;
+    invalidateVerify();
+    renderDecode();
+    renderCopyStatus();
+  }
+
   for (const b of document.querySelectorAll('[data-sample]')) {
     b.addEventListener('click', () => {
       $('jwt-input').value = S.decode[b.dataset.sample];
-      renderDecode();
+      tokenChanged();
     });
   }
   $('btn-clear').addEventListener('click', () => {
     $('jwt-input').value = '';
-    renderDecode();
-    $('decode-status').textContent = t('decode.cleared');
+    tokenChanged(true);
   });
-  $('jwt-input').addEventListener('input', renderDecode);
+  $('jwt-input').addEventListener('input', () => tokenChanged());
 
   for (const b of document.querySelectorAll('[data-copy]')) {
     b.addEventListener('click', async () => {
       const part = b.dataset.copy;
-      const name = t(`decode.${part}`);
+      const text = state.copy[part];
+      if (text === undefined) return;
+      const job = ++state.copyJob;
+      const revision = state.revision;
+      let key;
       try {
         if (!navigator.clipboard) throw new Error('clipboard');
-        await navigator.clipboard.writeText(state.copy[part] || '');
-        $('copy-status').textContent = t('decode.copied', { name });
+        await navigator.clipboard.writeText(text);
+        key = 'decode.copied';
       } catch {
-        $('copy-status').textContent = t('decode.copyFailed');
+        key = 'decode.copyFailed';
       }
+      if (job !== state.copyJob || revision !== state.revision || state.copy[part] !== text) return;
+      state.copyFeedback = { key, part };
+      renderCopyStatus();
     });
   }
   renders.push(renderDecode);
+  renders.push(renderCopyStatus);
 
   // ===== 署名検証 =====
   const algSelect = $('alg-select');
@@ -194,7 +233,7 @@
   }
 
   // HS は共有鍵、それ以外は公開鍵（PEM か JWK）
-  const keyGroup = () => (C.ALGORITHMS[algSelect.value].family === 'HS' ? 'HS' : 'RS');
+  const keyGroup = () => C.ALG_NAMES.includes(algSelect.value) && C.ALGORITHMS[algSelect.value].family === 'HS' ? 'HS' : 'RS';
 
   function renderKeyLabels() {
     const group = keyGroup();
@@ -206,20 +245,48 @@
     const alg = state.token && state.token.header ? state.token.header.alg : undefined;
     const known = typeof alg === 'string';
     $('verify-header-alg').textContent = known ? t('verify.headerAlg', { alg }) : t('verify.headerAlgNone');
-    $('btn-use-header-alg').disabled = !known || !C.ALGORITHMS[alg];
+    $('btn-use-header-alg').disabled = !known || !C.ALG_NAMES.includes(alg);
   }
 
   const renderVerify = () => {
     renderKeyLabels();
     renderVerifyHeaderAlg();
+    const current = state.verify;
+    $('btn-verify').disabled = Boolean(current && current.phase === 'running');
+    if (!current) {
+      showVerifyResult('', '', []);
+      return;
+    }
+    if (current.phase === 'running') {
+      showVerifyResult('', t('verify.running'), []);
+      return;
+    }
+    const r = current.result;
+    if (current.phase === 'readError' || !r.ok) {
+      showVerifyResult('danger', current.phase === 'readError' ? errorText(r) : verifyErrorText(r), []);
+      return;
+    }
+    const notes = [];
+    if (r.mismatch) notes.push(['warn', t('verify.mismatch', { alg: r.alg, headerAlg: r.headerAlg })]);
+    for (const w of r.warnings) notes.push(['danger', t(`verr.${w.code}`, w.vars)]);
+    if (r.keyBits) notes.push(['info', t('verify.keyBits', { bits: r.keyBits })]);
+    notes.push(['info', t(`verify.keyKind.${r.keyKind}`)]);
+    showVerifyResult(r.valid ? 'ok' : 'danger', t(r.valid ? 'verify.valid' : 'verify.invalid', { alg: r.alg }), notes);
   };
 
-  algSelect.addEventListener('change', renderKeyLabels);
+  function invalidateVerify() {
+    state.verifyJob++;
+    state.verify = null;
+    renderVerify();
+  }
+
+  algSelect.addEventListener('change', invalidateVerify);
+  $('key-input').addEventListener('input', invalidateVerify);
   $('btn-use-header-alg').addEventListener('click', () => {
     const alg = state.token && state.token.header ? state.token.header.alg : undefined;
-    if (typeof alg === 'string' && C.ALGORITHMS[alg]) {
+    if (typeof alg === 'string' && C.ALG_NAMES.includes(alg)) {
       algSelect.value = alg;
-      renderKeyLabels();
+      invalidateVerify();
     }
   });
 
@@ -229,8 +296,7 @@
       $('jwt-input').value = sample.token;
       algSelect.value = sample.alg;
       $('key-input').value = sample.key;
-      renderDecode();
-      renderKeyLabels();
+      tokenChanged();
     });
   }
 
@@ -246,26 +312,54 @@
   }
 
   $('btn-verify').addEventListener('click', async () => {
-    const token = C.parseToken($('jwt-input').value);
-    if (!token.ok) {
-      showVerifyResult('danger', errorText(token), []);
-      return;
-    }
+    const job = ++state.verifyJob;
+    const text = $('jwt-input').value;
     const alg = algSelect.value;
-    showVerifyResult('', t('verify.running'), []);
-    const r = await V.verify(token, alg, $('key-input').value);
-    if (!r.ok) {
-      showVerifyResult('danger', verifyErrorText(r), []);
+    const key = $('key-input').value;
+    const token = C.parseToken(text);
+    if (!token.ok) {
+      state.verify = { phase: 'readError', result: token };
+      renderVerify();
       return;
     }
-    const notes = [];
-    if (r.mismatch) notes.push(['warn', t('verify.mismatch', { alg: r.alg, headerAlg: r.headerAlg })]);
-    for (const w of r.warnings) notes.push(['danger', t(`verr.${w.code}`, w.vars)]);
-    if (r.keyBits) notes.push(['info', t('verify.keyBits', { bits: r.keyBits })]);
-    notes.push(['info', t(`verify.keyKind.${r.keyKind}`)]);
-    showVerifyResult(r.valid ? 'ok' : 'danger', t(r.valid ? 'verify.valid' : 'verify.invalid', { alg: r.alg }), notes);
+    state.verify = { phase: 'running' };
+    renderVerify();
+    let result;
+    try {
+      result = await V.verify(token, alg, key);
+    } catch (error) {
+      result = { ok: false, code: 'verify.error', detail: typeof error?.name === 'string' ? error.name : 'Error' };
+    }
+    if (job !== state.verifyJob) return;
+    if ($('jwt-input').value !== text || algSelect.value !== alg || $('key-input').value !== key) {
+      invalidateVerify();
+      return;
+    }
+    state.verify = { phase: 'finished', result };
+    renderVerify();
   });
   renders.push(renderVerify);
+
+  // 新しいタブから渡すときも、手入力と同じ状態の更新を通す。
+  const workbench = globalThis.JwtWorkbench.init({
+    getToken: () => $('jwt-input').value,
+    sendToken: ({ token, alg, key, tab }) => {
+      $('jwt-input').value = token;
+      if (tab === 'verify') {
+        if (C.ALG_NAMES.includes(alg)) algSelect.value = alg;
+        $('key-input').value = key ?? '';
+      }
+      tokenChanged();
+      selectTab($(`tab-${tab === 'verify' ? 'verify' : 'decode'}`), true);
+    }
+  });
+  renders.push(workbench.render);
+  $('btn-clear-all').addEventListener('click', () => {
+    $('jwt-input').value = '';
+    $('key-input').value = '';
+    tokenChanged(true);
+    workbench.clear();
+  });
 
   // ===== テーマ・言語・初期表示 =====
   const themeBtn = $('btn-theme');

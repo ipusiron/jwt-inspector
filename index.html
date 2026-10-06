@@ -6,7 +6,7 @@
   <meta http-equiv="Content-Security-Policy"
     content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <meta name="referrer" content="no-referrer">
-  <meta name="description" content="JWT Inspector - JWTをブラウザーの中だけでデコードし、RFCに沿って検査して、HS・RS・PS・ESの署名を検証する学習ツール">
+  <meta name="description" content="JWT Inspector - JWTをブラウザーの中だけでデコード・検査・作成し、HS・RS・PS・ESの署名検証と、弱い鍵・アルゴリズムの取り違えを学べるツール">
   <meta name="author" content="ipusiron">
   <meta name="color-scheme" content="light dark">
   <link rel="icon" href="data:,">
@@ -20,12 +20,14 @@
       <div class="header-spacer"></div>
       <h1>JWT Inspector</h1>
       <div class="header-actions">
+        <button type="button" id="btn-clear-all" class="btn small" data-i18n="work.clearAll">全入力と鍵を消す</button>
         <button type="button" id="btn-lang" class="icon-btn" data-i18n="ui.langButton" data-i18n-attr="aria-label:ui.langLabel;title:ui.langLabel"
           aria-label="Switch to English" title="Switch to English">English</button>
         <button type="button" id="btn-theme" class="icon-btn" aria-label="ダークモードに切り替える" title="ダークモードに切り替える">🌙</button>
       </div>
     </div>
-    <p class="subtitle" data-i18n="ui.subtitle">JWTをブラウザーの中だけでデコードし、RFCに沿って検査して、HS・RS・PS・ESの署名を検証する学習ツール</p>
+    <p class="subtitle" data-i18n="ui.subtitle">JWTをブラウザーの中だけでデコード・検査・作成し、HS・RS・PS・ESの署名検証と、弱い鍵・アルゴリズムの取り違えを学べるツール</p>
+    <p class="note" data-i18n="work.clearNote">「全入力と鍵を消す」は、全タブの入力・結果・メモリー内の鍵を消します。コピー済みのクリップボードは消しません。</p>
   </header>
 
   <noscript><p class="noscript" data-i18n="ui.noscript">このページはJavaScriptで動きます。JavaScriptを有効にしてから開き直してください。</p></noscript>
@@ -35,6 +37,12 @@
       data-i18n="tab.decode">デコードと検査</button>
     <button type="button" class="tab-btn" role="tab" id="tab-verify" data-tab="verify" aria-controls="panel-verify" aria-selected="false" tabindex="-1"
       data-i18n="tab.verify">署名検証</button>
+    <button type="button" class="tab-btn" role="tab" id="tab-create" data-tab="create" aria-controls="panel-create" aria-selected="false" tabindex="-1"
+      data-i18n="tab.create">作成と署名</button>
+    <button type="button" class="tab-btn" role="tab" id="tab-audit" data-tab="audit" aria-controls="panel-audit" aria-selected="false" tabindex="-1"
+      data-i18n="tab.audit">弱い鍵の検査</button>
+    <button type="button" class="tab-btn" role="tab" id="tab-lab" data-tab="lab" aria-controls="panel-lab" aria-selected="false" tabindex="-1"
+      data-i18n="tab.lab">攻撃の再現</button>
     <button type="button" class="tab-btn" role="tab" id="tab-learn" data-tab="learn" aria-controls="panel-learn" aria-selected="false" tabindex="-1"
       data-i18n="tab.learn">学習</button>
   </nav>
@@ -156,7 +164,146 @@
         </div>
         <p id="verify-result" class="verdict" aria-live="polite"></p>
         <ul class="findings" id="verify-notes"></ul>
+        <p class="note" data-i18n="verify.scopeNote">署名の一致だけでは、ログインや権限を認められません。アルゴリズムの固定に加え、発行者・宛先・有効期限などを、利用する側の規則で検証する必要があります。</p>
         <p class="note" data-i18n="verify.note">鍵もトークンも、このページの中だけで処理します。本番の鍵を入れるときは、自分の端末で開き、使い終わったら入力欄を消してください。</p>
+      </div>
+    </section>
+
+    <!-- ===== 作成と署名 ===== -->
+    <section class="tabpanel" id="panel-create" role="tabpanel" aria-labelledby="tab-create" tabindex="0" hidden>
+      <h2 data-i18n="create.title">JWTの作成と署名</h2>
+      <p data-i18n="create.lead">ヘッダーとペイロードをJSONで入力し、HS・RS・PS・ESの256・384・512、計12種類で署名できます。作ったJWTはデコードや署名検証へ渡せます。</p>
+
+      <div class="card">
+        <label class="field-label" for="create-alg" data-i18n="create.algLabel">署名に使うアルゴリズム</label>
+        <select id="create-alg" class="select"></select>
+        <div id="create-secret-group">
+          <label class="field-label" for="create-secret" data-i18n="create.secretLabel">共有鍵（UTF-8の文字列）</label>
+          <textarea id="create-secret" class="text-area" rows="2" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off"></textarea>
+          <p class="note" data-i18n="create.secretHint">入力した文字列をそのままUTF-8の鍵として使います。生成した鍵はBase64urlの形ですが、デコードせずに文字列のまま使います。</p>
+        </div>
+        <div id="create-public-group" hidden>
+          <label class="field-label" for="create-public" data-i18n="create.publicLabel">生成した公開鍵（PEM／SPKI）</label>
+          <textarea id="create-public" class="text-area" rows="5" readonly spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off"></textarea>
+        </div>
+        <div class="btn-row">
+          <button type="button" class="btn" id="btn-create-key" data-i18n="create.generateKey">鍵を生成</button>
+        </div>
+        <p id="create-key-status" class="status" aria-live="polite"></p>
+        <p class="note" data-i18n="create.privateHint">非対称鍵の秘密鍵は取り出せない形でページのメモリーだけに保持します。秘密鍵の読み込み・書き出しは行わず、公開鍵（SPKI）だけを表示します。</p>
+      </div>
+
+      <div class="card">
+        <div class="parts">
+          <div class="field">
+            <label class="field-label" for="create-header" data-i18n="create.headerLabel">ヘッダー（JSON）</label>
+            <textarea id="create-header" class="text-area" rows="5" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off"></textarea>
+          </div>
+          <div class="field">
+            <label class="field-label" for="create-payload" data-i18n="create.payloadLabel">ペイロード（JSON）</label>
+            <textarea id="create-payload" class="text-area" rows="5" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off"></textarea>
+          </div>
+        </div>
+        <p class="note" data-i18n="create.jsonHint">ヘッダーのalgは選んだ方式と一致させます。最上位の重複したメンバー名、crit、b64=falseは受け付けません。</p>
+        <div class="btn-row">
+          <button type="button" class="btn small" id="btn-create-example" data-i18n="create.example">JSON例を入れる</button>
+          <button type="button" class="btn primary" id="btn-create-run" data-i18n="create.run">JWTを作成する</button>
+          <button type="button" class="btn" id="btn-create-clear" data-i18n="create.clear">鍵と入力をクリア</button>
+        </div>
+        <p id="create-status" class="verdict" aria-live="polite"></p>
+      </div>
+
+      <div class="card" id="create-output-group" hidden>
+        <label class="field-label" for="create-output" data-i18n="create.outputLabel">作成したJWT</label>
+        <textarea id="create-output" class="text-area" rows="5" readonly spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off"></textarea>
+        <div class="btn-row">
+          <button type="button" class="btn" id="btn-create-decode" data-i18n="work.toDecode">デコードへ渡す</button>
+          <button type="button" class="btn" id="btn-create-verify" data-i18n="work.toVerify">署名検証へ渡す</button>
+          <button type="button" class="btn" id="btn-create-copy" data-i18n="work.copy">JWTをコピー</button>
+        </div>
+        <p id="create-feedback" class="status" aria-live="polite"></p>
+      </div>
+    </section>
+
+    <!-- ===== 弱い鍵の検査 ===== -->
+    <section class="tabpanel" id="panel-audit" role="tabpanel" aria-labelledby="tab-audit" tabindex="0" hidden>
+      <h2 data-i18n="audit.title">HS256の弱い鍵を小辞書で検査</h2>
+      <p data-i18n="audit.lead">自分のトークン、または検査の許可を得たHS256トークンを、手元の小辞書で調べます。検査はブラウザーの中だけで行います。</p>
+
+      <div class="card">
+        <label class="field-label" for="audit-token" data-i18n="audit.tokenLabel">検査するJWT（HS256）</label>
+        <textarea id="audit-token" class="text-area" rows="4" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off"></textarea>
+        <div class="btn-row">
+          <button type="button" class="btn small" id="btn-audit-current" data-i18n="audit.current">デコードの入力を使う</button>
+          <button type="button" class="btn small" id="btn-audit-example" data-i18n="audit.example">弱い鍵の例を入れる</button>
+        </div>
+        <label class="field-label" for="audit-candidates" data-i18n="audit.candidatesLabel">候補鍵（1行に1個）</label>
+        <textarea id="audit-candidates" class="text-area" rows="7" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off"></textarea>
+        <p class="note" data-i18n="audit.candidatesHint">改行で候補を区切り、空行は無視します。鍵の先頭と末尾の空白は残して検査します。</p>
+        <p class="note" data-i18n="audit.limits">上限は1000件、候補1個につきUTF-8で1024バイト、候補欄全体で1048576文字です。</p>
+        <div class="btn-row">
+          <button type="button" class="btn small" id="btn-audit-defaults" data-i18n="audit.defaults">既定の20候補を入れる</button>
+          <button type="button" class="btn primary" id="btn-audit-run" data-i18n="audit.run">検査する</button>
+          <button type="button" class="btn" id="btn-audit-stop" data-i18n="audit.stop" disabled>中止</button>
+          <button type="button" class="btn" id="btn-audit-clear" data-i18n="audit.clear">入力と結果をクリア</button>
+        </div>
+        <label class="field-label" for="audit-progress" data-i18n="audit.progressLabel">検査の進み具合</label>
+        <progress id="audit-progress" value="0" max="1"></progress>
+        <p id="audit-status" class="verdict" aria-live="polite"></p>
+        <p class="note" data-i18n="audit.limitNote">見つからなくても、安全な鍵だという証明にはなりません。この候補一覧に、署名と一致する鍵がなかったという結果です。</p>
+      </div>
+      <div class="card" id="audit-key-group" hidden>
+        <label class="field-label" for="audit-key" data-i18n="audit.keyLabel">一致した候補鍵</label>
+        <textarea id="audit-key" class="text-area" rows="2" readonly spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off"></textarea>
+      </div>
+    </section>
+
+    <!-- ===== 攻撃の再現 ===== -->
+    <section class="tabpanel" id="panel-lab" role="tabpanel" aria-labelledby="tab-lab" tabindex="0" hidden>
+      <h2 data-i18n="lab.title">アルゴリズムの取り違えを再現</h2>
+      <p data-i18n="lab.lead">内蔵のRS256サンプルだけを使い、roleをadminへ書き換えて、脆弱な実装とRS256に固定した実装を比べます。外部URLの入力や通信はありません。</p>
+
+      <div class="card">
+        <label class="field-label" for="lab-mode" data-i18n="lab.modeLabel">再現するシナリオ</label>
+        <select id="lab-mode" class="select">
+          <option value="none" data-i18n="lab.mode.none">alg=noneで署名を省略</option>
+          <option value="confusion" data-i18n="lab.mode.confusion">RS256→HS256で公開鍵を共有鍵として使う</option>
+        </select>
+        <div class="btn-row">
+          <button type="button" class="btn primary" id="btn-lab-run" data-i18n="lab.run">再現する</button>
+          <button type="button" class="btn" id="btn-lab-clear" data-i18n="lab.clear">結果をクリア</button>
+        </div>
+        <p id="lab-status" class="verdict" aria-live="polite"></p>
+      </div>
+
+      <div class="card" id="lab-output-group" hidden>
+        <h3 data-i18n="lab.comparisonTitle">受け付け方の比較</h3>
+        <p class="note" data-i18n="lab.tableNote">狭い画面では、表の中を横にスクロールできます。</p>
+        <div class="table-wrap" tabindex="0" role="region" data-i18n-attr="aria-label:lab.comparisonTitle" aria-label="受け付け方の比較">
+          <table class="lab-table">
+            <thead>
+              <tr>
+                <th scope="col" data-i18n="lab.col.token">トークン</th>
+                <th scope="col" data-i18n="lab.col.unsafe">脆弱な実装</th>
+                <th scope="col" data-i18n="lab.col.fixed">RS256固定</th>
+              </tr>
+            </thead>
+            <tbody id="lab-comparison"></tbody>
+          </table>
+        </div>
+        <p id="lab-detail" class="note"></p>
+        <p class="note" data-i18n="lab.scopeNote">ここではアルゴリズムの受け付け方と署名検証だけを比較します。認証・認可には、発行者・宛先・有効期限などの検証や、権限の判定も必要です。</p>
+        <label class="field-label" for="lab-original" data-i18n="lab.originalLabel">元のJWT（RS256）</label>
+        <textarea id="lab-original" class="text-area" rows="4" readonly spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off"></textarea>
+        <label class="field-label" for="lab-token" data-i18n="lab.tokenLabel">書き換えたJWT</label>
+        <textarea id="lab-token" class="text-area" rows="4" readonly spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off"></textarea>
+        <label class="field-label" for="lab-public" data-i18n="lab.publicLabel">例の公開鍵（PEM／SPKI）</label>
+        <textarea id="lab-public" class="text-area" rows="5" readonly spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off"></textarea>
+        <div class="btn-row">
+          <button type="button" class="btn" id="btn-lab-decode" data-i18n="work.toDecode">デコードへ渡す</button>
+          <button type="button" class="btn" id="btn-lab-verify" data-i18n="work.toVerify">署名検証へ渡す</button>
+        </div>
+        <p id="lab-feedback" class="status" aria-live="polite"></p>
       </div>
     </section>
 
@@ -179,7 +326,7 @@
       </div>
       <div class="card">
         <h3 data-i18n="learn.key.title">鍵の強さ</h3>
-        <p data-i18n="learn.key.body">HMACの鍵は、ハッシュの出力以上の長さが要ります（RFC 7518 §3.2。HS256なら256ビット）。RSAは2048ビット以上です（§3.3）。人が覚えられるパスワードをHS256の鍵に直接使ってはいけません（RFC 8725 §3.5）。短い鍵のトークンは、手元で辞書を回すだけで鍵を当てられます。</p>
+        <p data-i18n="learn.key.body">HMACの鍵は、ハッシュの出力以上の長さが要ります（RFC 7518 §3.2。HS256なら256ビット）。RSAは2048ビット以上です（§3.3）。人が覚えられるパスワードをHS256の鍵に直接使ってはいけません（RFC 8725 §3.5）。推測しやすい鍵は、手元で候補を試す辞書攻撃で見つかることがあります。長さだけでは推測の難しさを判断できません。</p>
       </div>
       <div class="card">
         <h3 data-i18n="learn.header.title">鍵の場所を指すヘッダー</h3>
@@ -209,9 +356,12 @@
   <script src="js/jwt-core.js"></script>
   <script src="js/jwt-verify.js"></script>
   <script src="js/samples.js"></script>
+  <script src="js/jwt-create.js"></script>
+  <script src="js/jwt-lab.js"></script>
   <script src="js/messages.js"></script>
   <script src="js/i18n.js"></script>
   <script src="js/theme.js"></script>
+  <script src="js/workbench-ui.js"></script>
   <script src="script.js"></script>
 </body>
 </html>
