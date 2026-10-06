@@ -175,6 +175,7 @@ h1 {
 .tabs {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   gap: 8px;
   max-width: 980px;
   margin: 0 auto;
@@ -399,6 +400,7 @@ thead th { background: var(--surface); }
 .finding {
   display: flex;
   flex-wrap: wrap;
+  align-items: flex-start;
   gap: 8px;
   margin: 8px 0;
   padding: 10px 12px;
@@ -415,6 +417,7 @@ thead th { background: var(--surface); }
 
 .tag {
   flex: 0 0 auto;
+  white-space: nowrap;
   padding: 0 8px;
   border-radius: 999px;
   font-size: 14px;
