@@ -234,6 +234,8 @@ jwt-inspector/
 ├── js/                       # Scripts shared by the page and the tests
 │   ├── jwt-core.js           # Base64url, JSON, token parsing, times, linting (no DOM)
 │   ├── jwt-verify.js         # Signature verification (Web Crypto), PEM and JWK, key lengths
+│   ├── jwt-create.js         # In-memory key generation and JWT signing
+│   ├── jwt-lab.js            # Small HS256 dictionary checks and built-in sample demonstrations
 │   ├── samples.js            # Sample tokens and keys (public keys and a demo secret only)
 │   ├── messages.js           # Japanese and English text
 │   ├── i18n.js               # Language selection and static text replacement
@@ -244,6 +246,8 @@ jwt-inspector/
 │   ├── fixtures.json         # Test vectors (tokens and keys for twelve algorithms)
 │   ├── core.test.js          # Decoding, linting, times
 │   ├── verify.test.js        # Signature verification and key formats
+│   ├── create.test.js        # Key generation, signing and input limits
+│   ├── lab.test.js           # Dictionary checks, cancellation and algorithm confusion
 │   ├── readme.test.js        # README tables, headings, images, structure
 │   ├── html.test.js          # CSP, ARIA, text, ids
 │   ├── contrast.test.js      # Color contrast, 44px and 16px

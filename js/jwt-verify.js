@@ -59,8 +59,8 @@
 
   // ===== 鍵の取り込み =====
   async function importKey(alg, keyInput) {
+    if (!C.ALG_NAMES.includes(alg)) return fail('alg.unsupported', { alg });
     const spec = C.ALGORITHMS[alg];
-    if (!spec) return fail('alg.unsupported', { alg });
     const subtle = globalThis.crypto && globalThis.crypto.subtle;
     if (!subtle) return fail('crypto.missing');
     const { family, bits, curve } = spec;
@@ -110,7 +110,7 @@
   function keyWarnings(alg, keyBits) {
     const spec = C.ALGORITHMS[alg];
     const out = [];
-    if (!spec || keyBits === null || keyBits === undefined) return out;
+    if (!C.ALG_NAMES.includes(alg) || keyBits === null || keyBits === undefined) return out;
     if (spec.family === 'HS') {
       const min = MIN_HS_BITS[spec.bits];
       if (keyBits < min) out.push({ code: 'key.hsShort', vars: { bits: keyBits, min } });
@@ -123,8 +123,8 @@
   // ===== 検証 =====
   // token は JwtCore.parseToken の結果。alg は検証側が選んだアルゴリズム（RFC 8725 §3.1 は検証側が決めることを求める）
   async function verify(token, alg, keyInput) {
+    if (!C.ALG_NAMES.includes(alg)) return fail('alg.unsupported', { alg });
     const spec = C.ALGORITHMS[alg];
-    if (!spec) return fail('alg.unsupported', { alg });
     if (!token.signature.length) return fail('signature.empty');
     const imported = await importKey(alg, keyInput);
     if (!imported.ok) return imported;

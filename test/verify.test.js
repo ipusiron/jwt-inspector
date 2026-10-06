@@ -5,6 +5,14 @@ import { core, verifier, fixtures } from './load.js';
 
 const C = core();
 const V = verifier();
+test('継承プロパティ名のアルゴリズムは例外でなく未対応を返す', async () => {
+  for (const alg of ['constructor', 'toString', '__proto__']) {
+    assert.equal((await V.importKey(alg, 'secret')).code, 'alg.unsupported');
+    assert.equal((await V.verify(C.parseToken(fixtures.decode.valid), alg, 'secret')).code, 'alg.unsupported');
+    assert.deepEqual(V.keyWarnings(alg, 8), []);
+  }
+});
+
 const parsed = (t) => {
   const r = C.parseToken(t);
   assert.ok(r.ok, JSON.stringify(r));

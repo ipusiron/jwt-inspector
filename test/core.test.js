@@ -161,6 +161,29 @@ test('いちばん重い level を返す（danger > warn > info > ok）', () => 
   assert.equal(C.worst([]), 'ok');
 });
 
+test('JSONのエスケープ表記が異なっても同じ名前のメンバーとして扱う', () => {
+  assert.deepEqual(C.duplicateKeys(String.raw`{"alg":"RS256","\u0061lg":"HS256"}`), ['alg']);
+  assert.deepEqual(C.duplicateKeys(String.raw`{"a\"b":1,"a\u0022b":2}`), ['a"b']);
+  assert.deepEqual(C.duplicateKeys(String.raw`{"a":1,"\u0062":2}`), []);
+});
+
+test('日時表示の範囲を超えるNumericDateでも検査は止まらず、日時はハイフンになる', () => {
+  for (const sec of [1e20, -1e20, 8640000000001, -8640000000001]) {
+    assert.equal(C.toIso(sec), '-');
+    const r = C.lint(parsed(makeToken({ alg: 'HS256' }, { exp: sec, nbf: sec, iat: sec })), NOW);
+    assert.equal(r.times.exp.iso, '-');
+  }
+  assert.notEqual(C.toIso(8640000000000), '-');
+  assert.equal(C.timeStatus({ exp: 1e20 }, NOW).exp.state, 'ok');
+  assert.equal(C.timeStatus({ exp: -1e20 }, NOW).exp.state, 'expired');
+});
+
+test('Objectのプロパティ名はアルゴリズムとして認めない', () => {
+  for (const alg of ['constructor', 'toString', '__proto__']) {
+    assert.ok(codes(C.lint(parsed(makeToken({ alg }, {})), NOW)).includes('alg.unknown'), alg);
+  }
+});
+
 test('サンプルのトークンは、意図した検査結果になる', () => {
   const r = (t) => C.lint(parsed(t), NOW);
   assert.equal(C.worst(r(fixtures.decode.valid).findings), 'info');
