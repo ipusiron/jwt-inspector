@@ -7,6 +7,8 @@ import { read, load, core, verifier } from './load.js';
 
 const C = core();
 const V = verifier();
+const G = load('js/jwt-create.js').JwtCreate;
+const L = load('js/jwt-lab.js').JwtLab;
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
 const DOCS = {
@@ -92,6 +94,33 @@ function table(text, firstHeader) {
 const noCode = (md) => md.replace(/```[\s\S]*?```/g, '');
 const h2 = (md) => noCode(md).split('\n').filter((l) => l.startsWith('## ')).map((l) => l.slice(3));
 const headings = (md) => noCode(md).split('\n').filter((l) => /^#{1,4} /.test(l));
+
+test('日英READMEのHS生成鍵の表は、実際に生成した乱数長とUTF-8鍵文字列長に一致する', async () => {
+  const headers = {
+    ja: '| アルゴリズム | 生成する乱数（バイト） | UTF-8の鍵文字列（文字＝バイト） |',
+    en: '| Algorithm | Random bytes generated | UTF-8 key text (characters = bytes) |'
+  };
+  const expected = [];
+  for (const alg of C.ALG_NAMES.filter((name) => name.startsWith('HS'))) {
+    const result = await G.generateKey(alg);
+    assert.ok(result.ok, alg);
+    const random = C.decodeB64url(result.secret);
+    assert.ok(random.ok, alg);
+    assert.equal(random.bytes.length, C.ALGORITHMS[alg].bits / 8, alg);
+    assert.equal(result.secret.length, C.utf8(result.secret).length, alg);
+    expected.push([alg, String(random.bytes.length), String(C.utf8(result.secret).length)]);
+  }
+  for (const lang of ['ja', 'en']) assert.deepEqual(table(DOCS[lang].text, headers[lang]), expected, lang);
+});
+
+test('日英READMEの注意と限界は小辞書の全上限を示す', () => {
+  for (const [lang, doc] of Object.entries(DOCS)) {
+    const limits = section(doc.text, doc.sec.limits);
+    for (const n of [L.MAX_CANDIDATES, L.MAX_CANDIDATE_BYTES, L.MAX_CANDIDATES_CHARS]) {
+      assert.match(limits, new RegExp(`\\b${n}\\b`), `${lang}: ${n}`);
+    }
+  }
+});
 
 test('YAML メタデータの構造（キーの順、ブロック形式のリスト、固定の値）。YAML は README.md だけに置く', () => {
   const m = DOCS.ja.text.match(/^<!--\n---\n([\s\S]*?)\n---\n-->\n/);
