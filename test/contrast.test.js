@@ -65,6 +65,23 @@ test('操作するボタン・リンク・入力欄は高さ44px以上、入力�
   }
 });
 
+test('タブは狭い幅でも折り返せて、各行を中央へ配置する', () => {
+  const tabs = css.match(/(?:^|\n)\.tabs\s*\{([^}]+)\}/)?.[1] ?? '';
+  assert.match(tabs, /\bdisplay:\s*flex\s*;/);
+  assert.match(tabs, /\bflex-wrap:\s*wrap\s*;/);
+  assert.match(tabs, /\bjustify-content:\s*center\s*;/);
+});
+
+test('複数行の検査本文でもラベルを縦に伸ばさず、ラベルの改行と縮小を防ぐ', () => {
+  const finding = css.match(/(?:^|\n)\.finding\s*\{([^}]+)\}/)?.[1] ?? '';
+  const tag = css.match(/(?:^|\n)\.tag\s*\{([^}]+)\}/)?.[1] ?? '';
+  assert.match(finding, /\bdisplay:\s*flex\s*;/);
+  assert.match(finding, /\bflex-wrap:\s*wrap\s*;/);
+  assert.match(finding, /\balign-items:\s*flex-start\s*;/);
+  assert.match(tag, /\bwhite-space:\s*nowrap\s*;/);
+  assert.match(tag, /\bflex:\s*0\s+0\s+auto\s*;/);
+});
+
 test('本文の書体は欧文の書体を先に置く（日本語の書体のバックスラッシュが ¥ の形で描かれないように）', () => {
   assert.match(css, /body \{[^}]*font-family: "Segoe UI", system-ui,/);
 });
