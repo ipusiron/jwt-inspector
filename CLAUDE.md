@@ -63,8 +63,8 @@ Keep `theme-init.js` in the head. The remaining external scripts load in order: 
 - No network requests at all: JWK Sets and `jku` URLs are deliberately not fetched
 - All output is built with DOM APIs and `textContent` (no `innerHTML`; tested)
 - Tokens and keys are not written to application storage; only language and theme choices are persisted
-- Generated asymmetric private keys stay in memory as non-extractable CryptoKeys. Clear, algorithm changes and reload lose them; this is not a guarantee of browser-memory zeroization
-- Global clear removes all tabs' input, output and key references. Per-tab clear does not clear data transferred elsewhere, and neither action erases the clipboard. Late asynchronous results must not repopulate cleared fields
+- Generated asymmetric private keys stay in memory as non-extractable CryptoKeys. Creation-tab clear, global clear, algorithm changes and reload lose them; this is not a guarantee of browser-memory zeroization
+- Global clear removes all tabs' input, output and key references. Individual clear buttons may leave transferred data or verification keys in place. Decode clear invalidates the shared token and verification result but retains the verification key. Neither action erases the clipboard. Late asynchronous results must not repopulate cleared fields
 - The dictionary check is for one's own tokens or explicitly permitted tests. A short key is not necessarily present in a dictionary, and no match is not a security verdict
 - Signature matching and the lab's algorithm acceptance are distinct from authentication and authorization. Applications still need issuer, audience, time and permission checks
 

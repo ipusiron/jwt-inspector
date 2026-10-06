@@ -263,9 +263,9 @@ The Attack lab uses only the built-in RS256 sample. The none example omits the s
 - When handling real keys or tokens, open the page on your own device and clear the fields afterwards
 - Use the small dictionary check only on your own tokens or tokens you have permission to test. It supports HS256 only, with limits of 1000 candidates, 1024 UTF-8 bytes per candidate and 1048576 UTF-16 code units in the entire candidates field
 - No match means only that none of the supplied candidates matched the signature. It does not prove key security or resistance to guessing
-- Generated asymmetric private keys exist only in memory and are lost on clearing, an algorithm change or a page reload. Private-key import and export are not provided
+- Generated asymmetric private keys exist only in memory and are lost when clearing the creation tab, clearing all inputs, changing the algorithm or reloading the page. Private-key import and export are not provided
 - Clearing all inputs and keys removes displayed data, results and held references; it does not guarantee that browser memory is overwritten with zeroes. An in-progress Web Crypto operation may finish, but its stale result is discarded
-- Clearing does not erase data already copied to the clipboard. A tab's clear button affects only that tab; use the global clear button to remove data transferred to other tabs
+- Clearing does not erase data already copied to the clipboard. Individual clear buttons may leave transferred data or the verification key in place. Clearing the decode input also clears the shared token and verification result, but retains the verification key. Use the global clear button to clear all inputs and keys
 - EdDSA and JWE (encrypted JWTs) are not supported
 - JWK Sets are not read, and keys are not fetched from a jku URL (the tool makes no external requests)
 - Linting is limited to what a single token shows. A matching signature is not authentication or authorization; the application must check the issuer, audience, expiry and permissions
