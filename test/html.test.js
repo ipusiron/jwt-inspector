@@ -6,9 +6,10 @@ const html = read('index.html');
 const C = core();
 const { MESSAGES, t } = load('js/messages.js').JwtMessages;
 const { parseVars } = load('js/i18n.js').JwtI18n;
-const SCRIPTS = ['script.js', 'js/jwt-core.js', 'js/jwt-verify.js', 'js/samples.js', 'js/messages.js', 'js/i18n.js', 'js/theme.js', 'js/theme-init.js'];
+const SCRIPTS = ['script.js', 'js/jwt-core.js', 'js/jwt-verify.js', 'js/jwt-create.js', 'js/jwt-lab.js', 'js/workbench-ui.js',
+  'js/samples.js', 'js/messages.js', 'js/i18n.js', 'js/theme.js', 'js/theme-init.js'];
 const ids = new Set([...html.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]));
-const TABS = ['decode', 'verify', 'learn'];
+const TABS = ['decode', 'verify', 'create', 'audit', 'lab', 'learn'];
 
 test('CSP はスクリプト・スタイルを同じ場所のファイルだけに限り、unsafe-inline と外部の通信を許さない', () => {
   const csp = html.match(/http-equiv="Content-Security-Policy"\s+content="([^"]+)"/)[1];
@@ -24,7 +25,7 @@ test('HTML に style 属性・インラインのスクリプト・イベント�
   assert.doesNotMatch(html, /\son[a-z]+=/i);
   const scripts = [...html.matchAll(/<script src="([^"]+)"><\/script>/g)].map((m) => m[1]);
   assert.deepEqual(scripts, ['js/theme-init.js', 'js/jwt-core.js', 'js/jwt-verify.js', 'js/samples.js',
-    'js/messages.js', 'js/i18n.js', 'js/theme.js', 'script.js']);
+    'js/jwt-create.js', 'js/jwt-lab.js', 'js/messages.js', 'js/i18n.js', 'js/theme.js', 'js/workbench-ui.js', 'script.js']);
   assert.equal((html.match(/<script/g) || []).length, scripts.length);
   for (const a of html.match(/<a [^>]*>/g)) assert.match(a, /target="_blank" rel="noopener noreferrer"/, a);
 });
@@ -47,16 +48,16 @@ test('ボタンは type="button"。入力欄には label があり、鍵とト�
     assert.match(html, new RegExp(`<label [^>]*for="${m[2]}"`), m[2]);
   }
   // 入力した鍵やトークンが、スペルチェックの機能で外部へ送られないようにする
-  for (const id of ['jwt-input', 'key-input']) {
-    const tag = html.match(new RegExp(`<textarea id="${id}"[^>]*>`))[0];
+  for (const tag of html.match(/<textarea [^>]*>/g)) {
     for (const attr of ['spellcheck="false"', 'autocomplete="off"', 'autocapitalize="off"', 'autocorrect="off"']) {
-      assert.ok(tag.includes(attr), `${id}: ${attr}`);
+      assert.ok(tag.includes(attr), `${tag}: ${attr}`);
     }
   }
 });
 
 test('動的に変わるところには aria-live がある', () => {
-  for (const id of ['decode-status', 'findings-summary', 'copy-status', 'verify-result', 'verify-header-alg']) {
+  for (const id of ['decode-status', 'findings-summary', 'copy-status', 'verify-result', 'verify-header-alg',
+    'create-key-status', 'create-status', 'create-feedback', 'audit-status', 'lab-status', 'lab-feedback']) {
     assert.match(html, new RegExp(`id="${id}"[^>]*aria-live="polite"`), id);
   }
 });
@@ -82,7 +83,7 @@ test('data-i18n のキーは辞書にあり、HTML に書いた日本語は辞�
 });
 
 test('画面のスクリプトが参照する id は、すべて HTML にある', () => {
-  const src = read('script.js');
+  const src = ['script.js', 'js/workbench-ui.js'].map(read).join('\n');
   const used = [...src.matchAll(/\$\('([a-z0-9-]+)'\)/g)].map((m) => m[1]);
   assert.ok(used.length >= 15, String(used.length));
   for (const id of used) assert.ok(ids.has(id), id);
@@ -134,4 +135,21 @@ test('samples.js に秘密鍵が入っていない（公開鍵とデモ用の共
   const src = read('js/samples.js');
   assert.doesNotMatch(src, /BEGIN (RSA |EC )?PRIVATE KEY/);
   assert.doesNotMatch(src, /"d"\s*:/); // JWK の秘密の成分
+});
+
+test('IDは重複せず、再現実験の入力は組み込みモードだけ、生成結果は読み取り専用', () => {
+  assert.equal(ids.size, [...html.matchAll(/\sid="([^"]+)"/g)].length);
+  const lab = html.match(/<section [^>]*id="panel-lab"[\s\S]*?<\/section>/)[0];
+  const modes = [...lab.matchAll(/<option value="([^"]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(modes, ['none', 'confusion']);
+  assert.equal((lab.match(/<input/g) || []).length, 0);
+  for (const id of ['create-public', 'create-output', 'audit-key', 'lab-original', 'lab-token', 'lab-public']) {
+    assert.match(html.match(new RegExp(`<textarea id="${id}"[^>]*>`))[0], /\sreadonly(?:\s|>)/, id);
+  }
+});
+
+test('作成・辞書・再現実験に通信と保存のAPIを入れない', () => {
+  for (const f of ['js/jwt-create.js', 'js/jwt-lab.js', 'js/workbench-ui.js']) {
+    assert.doesNotMatch(read(f), /\bfetch\s*\(|XMLHttpRequest|WebSocket|sendBeacon|localStorage|sessionStorage|indexedDB/, f);
+  }
 });

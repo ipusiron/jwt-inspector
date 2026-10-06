@@ -275,6 +275,7 @@ jwt-inspector/
 │   ├── jwt-verify.js         # 署名検証（Web Crypto）、PEMとJWKの読み取り、鍵の長さ
 │   ├── jwt-create.js         # メモリー内の鍵生成とJWTへの署名
 │   ├── jwt-lab.js            # HS256の小辞書検査と組み込みサンプルの再現実験
+│   ├── workbench-ui.js       # 作成・小辞書検査・再現実験の画面と非同期状態
 │   ├── samples.js            # サンプルのトークンと鍵（公開鍵とデモ用の共有鍵のみ）
 │   ├── messages.js           # 日本語と英語の文言
 │   ├── i18n.js               # 言語の選択と静的な文言の差し替え
@@ -287,6 +288,7 @@ jwt-inspector/
 │   ├── verify.test.js        # 署名検証と鍵の形
 │   ├── create.test.js        # 鍵生成・署名作成・入力制限
 │   ├── lab.test.js           # 小辞書検査・中止・アルゴリズム取り違え
+│   ├── ui-state.test.js      # 入力変更・言語切り替え・遅い非同期結果の破棄
 │   ├── readme.test.js        # READMEの表・見出し・画像・構造
 │   ├── html.test.js          # CSP・ARIA・文言・id
 │   ├── contrast.test.js      # 配色のコントラストと44px・16px

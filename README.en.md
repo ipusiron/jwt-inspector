@@ -236,6 +236,7 @@ jwt-inspector/
 │   ├── jwt-verify.js         # Signature verification (Web Crypto), PEM and JWK, key lengths
 │   ├── jwt-create.js         # In-memory key generation and JWT signing
 │   ├── jwt-lab.js            # Small HS256 dictionary checks and built-in sample demonstrations
+│   ├── workbench-ui.js       # Creation, dictionary and demonstration UI with asynchronous state
 │   ├── samples.js            # Sample tokens and keys (public keys and a demo secret only)
 │   ├── messages.js           # Japanese and English text
 │   ├── i18n.js               # Language selection and static text replacement
@@ -248,6 +249,7 @@ jwt-inspector/
 │   ├── verify.test.js        # Signature verification and key formats
 │   ├── create.test.js        # Key generation, signing and input limits
 │   ├── lab.test.js           # Dictionary checks, cancellation and algorithm confusion
+│   ├── ui-state.test.js      # Input changes, language switching and discarding stale asynchronous results
 │   ├── readme.test.js        # README tables, headings, images, structure
 │   ├── html.test.js          # CSP, ARIA, text, ids
 │   ├── contrast.test.js      # Color contrast, 44px and 16px

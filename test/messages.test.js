@@ -63,7 +63,7 @@ test('計算部が返しうるコードは、すべて辞書にある（検査�
 });
 
 test('画面のスクリプトが使うキーは、すべて辞書にある（組み立てるキーも含む）', () => {
-  const src = ['script.js', 'js/theme.js'].map(read).join('\n');
+  const src = ['script.js', 'js/theme.js', 'js/workbench-ui.js'].map(read).join('\n');
   const keys = [...src.matchAll(/\bt\('([a-z0-9]+\.[A-Za-z0-9.]+)'/g)].map((m) => m[1]);
   assert.ok(keys.length >= 14, String(keys.length));
   for (const k of keys) assert.ok(MESSAGES.ja[k] !== undefined, k);
@@ -78,7 +78,8 @@ test('画面のスクリプトが使うキーは、すべて辞書にある（�
 });
 
 test('画面のスクリプトと計算部に日本語の文字列を直接書かない（文言は辞書に置く）', () => {
-  for (const f of ['script.js', 'js/jwt-core.js', 'js/jwt-verify.js', 'js/theme.js', 'js/i18n.js']) {
+  for (const f of ['script.js', 'js/jwt-core.js', 'js/jwt-verify.js', 'js/jwt-create.js', 'js/jwt-lab.js',
+    'js/workbench-ui.js', 'js/theme.js', 'js/i18n.js']) {
     const code = read(f).split('\n').filter((line) => !/^\s*\/\//.test(line)).map((line) => line.replace(/\s\/\/.*$/, '')).join('\n');
     for (const m of code.matchAll(/'[^'\n]*'|`[^`\n]*`/g)) assert.doesNotMatch(m[0], JAPANESE, `${f}: ${m[0]}`);
   }
@@ -107,4 +108,33 @@ test('サンプルの鍵の長さは、文言が求める長さを満たす（�
   assert.equal(samples.verify.HS256.key.length * 8, 512);
   assert.ok(samples.verify.weak.key.length * 8 < V.MIN_HS_BITS[256]);
   assert.equal(samples.verify.HS256.key, fixtures.demoKey);
+});
+
+test('作成・小辞書・再現実験の全エラーと動的状態に日英の文言がある', () => {
+  const src = ['js/jwt-create.js', 'js/jwt-lab.js'].map(read).join('\n');
+  const codes = new Set([...src.matchAll(/fail\('([a-zA-Z0-9.]+)'/g)].map((m) => m[1]));
+  for (const part of ['header', 'payload']) {
+    for (const code of ['json.syntax', 'json.notObject', 'json.utf8', 'json.duplicate']) codes.add(`${part}.${code}`);
+  }
+  assert.ok(codes.size >= 25, String(codes.size));
+  for (const lang of ['ja', 'en']) {
+    for (const code of codes) {
+      assert.ok(['werr', 'err', 'verr'].some((prefix) => MESSAGES[lang][`${prefix}.${code}`]), `${lang}: ${code}`);
+    }
+    for (const suffix of ['found', 'notFound', 'cancelled']) assert.ok(MESSAGES[lang][`audit.${suffix}`], suffix);
+    for (const mode of ['none', 'confusion']) assert.ok(MESSAGES[lang][`lab.detail.${mode}`], mode);
+    for (const suffix of ['copied', 'copyFailed', 'sentDecode', 'sentVerify']) assert.ok(MESSAGES[lang][`work.${suffix}`], suffix);
+    for (const suffix of ['original', 'modified', 'accepted', 'rejected']) assert.ok(MESSAGES[lang][`lab.${suffix}`], suffix);
+  }
+});
+
+test('小辞書の説明にある上限と既定候補数は計算部に一致する', () => {
+  load('js/jwt-create.js');
+  const L = load('js/jwt-lab.js').JwtLab;
+  for (const lang of ['ja', 'en']) {
+    for (const value of [L.MAX_CANDIDATES, L.MAX_CANDIDATE_BYTES, L.MAX_CANDIDATES_CHARS]) {
+      assert.ok(MESSAGES[lang]['audit.limits'].includes(String(value)), `${lang}: ${value}`);
+    }
+    assert.ok(MESSAGES[lang]['audit.defaults'].includes(String(L.DEFAULT_CANDIDATES.length)), lang);
+  }
 });
