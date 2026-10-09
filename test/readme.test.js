@@ -277,3 +277,25 @@ test('サンプルの説明（4つと5つ）は、samples.js の数と同じ', (
   assert.ok(DOCS.en.text.includes('Four samples'));
   assert.ok(DOCS.en.text.includes('Five samples'));
 });
+
+test('ユースケースの「このツールならではの使い方」の例は判定と表示に一致する（日英）', () => {
+  const [ja, en] = [read('README.md'), read('README.en.md')];
+  const now = 1767225600;
+  const times = (payload) => C.timeStatus(payload, now);
+  assert.equal(2 ** 31 - 1, 2147483647);
+  const max = times({ exp: 2147483647 }).exp.iso;
+  const two = times({ exp: 2000000000 }).exp.iso;
+  assert.deepEqual([max, two], ['2038-01-19T03:14:07Z', '2033-05-18T03:33:20Z']);
+  for (const text of [ja, en]) assert.ok(text.includes('2038-01-19T03:14:07') && text.includes('2033-05-18T03:33:20'));
+  assert.equal(C.DEFAULT_LEEWAY, 60);
+  assert.deepEqual([times({ nbf: now + 30 }).nbf.state, times({ nbf: now + 90 }).nbf.state], ['leeway', 'notYet']);
+  const { MESSAGES } = load('js/messages.js').JwtMessages;
+  assert.ok(ja.includes(`「${MESSAGES.ja['time.leeway']}」`) && ja.includes(`「${MESSAGES.ja['time.notYet']}」`));
+  assert.ok(en.includes(`"${MESSAGES.en['time.leeway']}"`) && en.includes(`"${MESSAGES.en['time.notYet']}"`));
+  const e = (o) => C.encodeB64url(C.utf8(JSON.stringify(o)));
+  const algCode = (alg) => C.lint(C.parseToken(e({ alg, typ: 'JWT' }) + '.' + e({ sub: 'x' }) + '.'), now)
+    .findings.find((f) => f.code.startsWith('alg.'));
+  for (const alg of ['None', 'NONE']) assert.deepEqual([algCode(alg).level, algCode(alg).code], ['danger', 'alg.noneCase']);
+  assert.ok(ja.includes('「None」や「NONE」') && en.includes('"None" or "NONE"'));
+  assert.ok(ja.includes('「いま」の30秒後') && ja.includes('90秒後') && en.includes('30 seconds after "now"') && en.includes('at 90 seconds'));
+});

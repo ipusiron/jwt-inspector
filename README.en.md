@@ -231,6 +231,14 @@ The Attack lab uses only the built-in RS256 sample. The none example omits the s
 
 ## 🎯 Use cases
 
+Ways of using this tool in particular
+
+- Checking milestones of Unix time and the year 2038 problem (information classes): put 2147483647 (the largest signed 32-bit integer) into exp and it shows 2038-01-19T03:14:07 in UTC. One second later, old systems that count seconds in 32 bits overflow (the year 2038 problem). 2000000000 (two billion seconds) gives 2033-05-18T03:33:20, so you can read how a count of seconds maps to a date on the same screen (the tool displays dates with JavaScript, so the display does not break after 2038)
+- Feeling the tolerance for clock skew (networking and time synchronization classes): a token whose nbf (do not accept before this time) is 30 seconds after "now" shows "Within leeway" in the time table, and at 90 seconds it shows "Not yet valid". The leeway is 60 seconds, so if the clocks of the issuing server and the checking server differ by more than a minute, a token is unusable right after it is issued. It helps explain why clocks are synchronized with NTP and similar protocols
+- Seeing the risk of case-insensitive comparison (programming classes): a token whose alg is "None" or "NONE" is rated dangerous, because an implementation that compares without regard to case treats it as none. The standard (RFC 7515) says the comparison is case-sensitive, but depending on how values are compared they can look the same. It works as an example, like Windows file names (case-insensitive) and Linux file names (case-sensitive), of how the way of comparing changes the result
+
+General uses
+
 - Checking your own service: inspect exp, iss, aud and key length in issued tokens, and test HS256 candidate keys within the scope of your permission
 - Reviewing an implementation: show alg=none and algorithm pinning on a working page when discussing them with your team
 - CTFs and exercises: decode a provided token, check candidate keys and compare it with a token you sign yourself
